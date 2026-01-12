@@ -11,7 +11,7 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 
 ## 当前状态
 
-**Phase 6 - 模型评测与优化** 🔄 进行中
+**Phase 6 - 模型评测与优化** ✅ 已完成
 
 ### 已实现功能
 
@@ -64,17 +64,18 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 - [x] **响应式优化**: 移动端适配，导航栏和布局优化
 - [x] **Cloudflare Pages部署**: ✅ 已部署到生产环境
 
-#### Phase 6 🔄 进行中
+#### Phase 6 ✅ 已完成
 - [x] **评测框架搭建**: metrics.ts 评测数据收集器
 - [x] **评测数据采集**: Agent 执行自动记录评测数据
 - [x] **评测仪表盘**: /metrics 可视化页面，图表展示
 - [x] **模型对比实验**: A/B 测试不同模型配置
-- [ ] **Prompt 优化**: 基于评测结果优化 Agent Prompt
-- [ ] **成本优化**: 分析 Token 消耗，优化模型选择
+- [x] **Prompt 优化**: prompt-templates.ts 统一管理优化后的 Prompt
+- [x] **成本优化**: cost-optimizer.ts 模型成本估算、智能选择策略
 
 ### 待开发功能
 
-- [ ] Phase 6 剩余: Prompt 优化、成本优化
+- [ ] 更多 A/B 测试实验
+- [ ] 基于真实评测数据调优模型选择
 
 ## 访问地址
 
@@ -239,18 +240,30 @@ curl http://localhost:3000/api/health
 
 ## 更新日志
 
-### 2026-01-12 - Phase 6 进行中 🔄
-- 实现评测数据收集框架 (metrics.ts)
-- 实现实验配置管理 (experiment.ts)
-- 创建评测仪表盘页面 (/metrics)
-  - 总览卡片：调用次数、成功率、平均耗时、成本
-  - 调用趋势图表
-  - 模型使用分布饼图
-  - Agent 性能对比表
-  - 实验管理面板
-  - 调用日志列表
-- 修改 Agent 基类自动记录评测数据
-- 前端自动保存评测数据到 localStorage
+### 2026-01-12 - Phase 6 完成 🎉
+- **6.1-6.4 评测框架**:
+  - 实现评测数据收集框架 (metrics.ts)
+  - 实现实验配置管理 (experiment.ts)
+  - 创建评测仪表盘页面 (/metrics)
+    - 总览卡片：调用次数、成功率、平均耗时、成本
+    - 调用趋势图表
+    - 模型使用分布饼图
+    - Agent 性能对比表
+    - 实验管理面板
+    - 调用日志列表
+  - 修改 Agent 基类自动记录评测数据
+  - 前端自动保存评测数据到 localStorage
+- **6.5 Prompt 优化**:
+  - 创建 prompt-templates.ts 统一管理 Prompt 模板
+  - 优化所有 Agent 的系统提示词
+  - 添加 Token 优化约束、JSON 输出约束、错误处理指导
+  - 为每个 Agent 提供 Few-shot 示例和最佳实践
+- **6.6 成本优化**:
+  - 创建 cost-optimizer.ts 模型成本管理模块
+  - 配置各模型定价信息（GPT-4o/4.1、Qwen、DeepSeek）
+  - 实现智能模型选择策略（质量优先/平衡/经济）
+  - 添加 Token 估算和成本预警功能
+  - 新增成本相关 API 端点 (/api/metrics/cost/*)
 
 ### 2026-01-12 - Phase 5 完成 🎉
 - 实现统一导航栏（响应式设计）
@@ -284,8 +297,38 @@ curl http://localhost:3000/api/health
 ### 2026-01-12 - Phase 0 完成
 - 项目框架搭建
 
+## Phase 6 新增功能
+
+### 评测仪表盘 (/metrics)
+- **总览面板**: 调用次数、成功率、平均耗时、总成本
+- **趋势图表**: 调用量随时间变化趋势
+- **模型分布**: 各模型使用占比饼图
+- **Agent 性能**: 各 Agent 性能对比表
+- **实验管理**: A/B 测试实验配置
+- **调用日志**: 最近调用记录列表
+
+### Prompt 优化
+- 统一 Prompt 模板库 (src/core/prompt-templates.ts)
+- 结构化输出控制、Few-shot 示例
+- Token 优化约束（字段长度限制、数量限制）
+- 错误处理指导（信息不足时的处理方式）
+
+### 成本优化
+- 模型定价配置（支持 GPT-4o/4.1、Qwen、DeepSeek）
+- 三种成本策略：quality（质量优先）、balanced（平衡）、economy（经济）
+- Token 估算和成本预警
+- Agent 模型推荐配置
+
+### 成本 API 端点
+| 端点 | 方法 | 描述 |
+|------|------|------|
+| `/api/metrics/cost` | GET | 获取成本统计和模型对比 |
+| `/api/metrics/cost/models` | GET | 获取模型成本详情 |
+| `/api/metrics/cost/agents` | GET | 获取 Agent 模型推荐 |
+| `/api/metrics/cost/estimate` | POST | 估算调用成本 |
+
 ---
 
-**开发阶段**: Phase 6 - 模型评测与优化 🔄 进行中
+**开发阶段**: Phase 6 - 模型评测与优化 ✅ 已完成
 **生产地址**: https://job-copilot.pages.dev
 **评测仪表盘**: https://job-copilot.pages.dev/metrics

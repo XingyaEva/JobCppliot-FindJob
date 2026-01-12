@@ -4,6 +4,7 @@
  */
 
 import { chat, parseJsonResponse, MODELS } from '../core/api-client';
+import { COMPANY_ANALYZE_PROMPT } from '../core/prompt-templates';
 import type { AgentResult, AAnalysis, BAnalysis } from '../types';
 
 /** 公司分析输入 */
@@ -52,8 +53,10 @@ export interface CompanyAnalyzeOutput {
   summary: string; // 一句话总结
 }
 
-// 系统提示词
-const SYSTEM_PROMPT = `你是一个资深的行业分析师和求职顾问，擅长分析公司背景、AI应用场景和竞争格局。
+// 使用优化后的 Prompt
+const SYSTEM_PROMPT = COMPANY_ANALYZE_PROMPT;
+
+const SYSTEM_PROMPT_LEGACY = `你是一个资深的行业分析师和求职顾问，擅长分析公司背景、AI应用场景和竞争格局。
 
 ## 任务
 基于提供的公司名称和岗位信息，进行全面的公司分析，帮助求职者了解公司背景和面试准备方向。

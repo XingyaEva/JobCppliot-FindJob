@@ -4,6 +4,7 @@
  */
 
 import { chat, parseJsonResponse, MODELS } from '../core/api-client';
+import { RESUME_OPTIMIZE_PROMPT } from '../core/prompt-templates';
 import type { AgentResult, Resume, AAnalysis, BAnalysis } from '../types';
 
 /** 简历优化输入 */
@@ -85,88 +86,8 @@ export interface ResumeOptimizeOutput {
   };
 }
 
-// 系统提示词
-const SYSTEM_PROMPT = `你是一个资深的简历优化专家，擅长根据目标岗位优化简历内容，提升匹配度。
-
-## 任务
-根据目标岗位的JD分析结果和匹配评估，优化简历的各个部分，使其更符合岗位要求。
-
-## 优化原则
-
-### 1. 关键词注入
-- 从JD中提取关键技术词汇、能力词汇
-- 自然地融入简历描述中
-- 避免堆砌，保持语句通顺
-
-### 2. 差距弥补
-- 针对匹配分析中的gaps，调整表述
-- 用相关经验来弥补不足
-- 不编造经历，只优化表述方式
-
-### 3. 亮点强化
-- 突出与岗位匹配的优势
-- 添加量化数据（如提升30%、服务100万用户）
-- 使用STAR法则优化项目描述
-
-### 4. 表述优化
-- 使用主动动词开头（主导、推动、优化、搭建）
-- 结构清晰：做了什么 + 怎么做的 + 取得什么成果
-- 避免模糊表述（如"参与"改为"负责"）
-
-## 输出 JSON Schema
-{
-  "optimization_summary": "整体优化思路，100字以内",
-  "sections": {
-    "summary": {
-      "original": "原始求职意向/个人摘要",
-      "optimized": "优化后的版本",
-      "changes": ["修改说明1", "修改说明2"],
-      "matched_requirements": ["对应的JD要求1", "对应的JD要求2"]
-    },
-    "work_experience": [
-      {
-        "company": "公司名",
-        "position": "职位",
-        "original": "原始工作描述",
-        "optimized": "优化后的描述",
-        "changes": ["修改说明"],
-        "matched_requirements": ["对应的JD要求"],
-        "keywords_added": ["注入的关键词"]
-      }
-    ],
-    "projects": [
-      {
-        "name": "项目名",
-        "original": "原始项目描述",
-        "optimized": "优化后的描述",
-        "changes": ["修改说明"],
-        "matched_requirements": ["对应的JD要求"],
-        "keywords_added": ["注入的关键词"]
-      }
-    ],
-    "skills": {
-      "original": ["原技能1", "原技能2"],
-      "optimized": ["优化后技能1", "优化后技能2"],
-      "added": ["新增技能"],
-      "emphasized": ["强调的技能"],
-      "changes": ["技能部分的修改说明"]
-    }
-  },
-  "optimization_effect": {
-    "keywords_coverage": "关键词覆盖率变化，如'从60%提升至85%'",
-    "gaps_addressed": ["弥补的差距1", "弥补的差距2"],
-    "highlights_strengthened": ["强化的亮点1", "强化的亮点2"],
-    "estimated_match_improvement": "预估匹配度提升，如'+10-15分'"
-  }
-}
-
-## 注意事项
-1. 保持真实性，不编造经历
-2. 优化后的内容要比原始内容更有说服力
-3. 每个修改都要有明确的理由
-4. 关注JD中的"硬性要求"优先优化
-5. 如果用户提供了修改建议，优先考虑用户建议
-6. 直接输出JSON，不要添加markdown代码块`;
+// 使用优化后的 Prompt
+const SYSTEM_PROMPT = RESUME_OPTIMIZE_PROMPT;
 
 /**
  * 执行简历优化

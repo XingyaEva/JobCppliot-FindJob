@@ -4,6 +4,7 @@
  */
 
 import { chat, parseJsonResponse, MODELS } from '../core/api-client';
+import { MATCH_EVALUATE_PROMPT } from '../core/prompt-templates';
 import { experimentManager } from '../core/experiment';
 import type { AgentResult, Resume, AAnalysis, BAnalysis, Match, MatchLevel, DimensionMatch } from '../types';
 import type { AgentResultWithMetrics } from './base';

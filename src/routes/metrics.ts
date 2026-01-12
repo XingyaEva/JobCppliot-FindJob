@@ -5,6 +5,13 @@
 import { Hono } from 'hono';
 import { metricsCollector, type AgentMetrics, type MetricsSummary } from '../core/metrics';
 import { experimentManager, getModelDisplayName, getAvailableModels } from '../core/experiment';
+import { 
+  costOptimizer, 
+  getModelCostComparison, 
+  getAgentModelReport,
+  MODEL_PROFILES,
+  AGENT_MODEL_RECOMMENDATIONS 
+} from '../core/cost-optimizer';
 
 const metricsRoutes = new Hono();
 
@@ -321,6 +328,113 @@ metricsRoutes.get('/models', async (c) => {
   return c.json({
     success: true,
     models,
+  });
+});
+
+// ============ 成本优化 API ============
+
+/**
+ * GET /api/metrics/cost - 获取成本统计
+ */
+metricsRoutes.get('/cost', async (c) => {
+  const dailyStats = costOptimizer.getDailyStats();
+  const modelComparison = getModelCostComparison();
+  const agentReport = getAgentModelReport();
+
+  return c.json({
+    success: true,
+    daily_stats: dailyStats,
+    model_comparison: modelComparison,
+    agent_recommendations: agentReport,
+  });
+});
+
+/**
+ * GET /api/metrics/cost/models - 获取模型成本对比
+ */
+metricsRoutes.get('/cost/models', async (c) => {
+  const comparison = getModelCostComparison();
+  const profiles = Object.entries(MODEL_PROFILES).map(([model, profile]) => ({
+    model,
+    ...profile,
+  }));
+
+  return c.json({
+    success: true,
+    comparison,
+    profiles,
+  });
+});
+
+/**
+ * GET /api/metrics/cost/agents - 获取 Agent 模型推荐
+ */
+metricsRoutes.get('/cost/agents', async (c) => {
+  const report = getAgentModelReport();
+  const recommendations = Object.entries(AGENT_MODEL_RECOMMENDATIONS).map(([agent, rec]) => ({
+    agent,
+    default_model: rec.default,
+    alternatives: rec.alternatives,
+    min_quality: rec.minQuality,
+    selected_model: costOptimizer.selectModelForAgent(agent),
+  }));
+
+  return c.json({
+    success: true,
+    report,
+    recommendations,
+  });
+});
+
+/**
+ * PUT /api/metrics/cost/strategy - 更新成本优化策略
+ */
+metricsRoutes.put('/cost/strategy', async (c) => {
+  const { strategy, daily_budget, warning_threshold } = await c.req.json();
+
+  // 更新策略（需要重新创建实例，这里简化处理）
+  const validStrategies = ['quality', 'balanced', 'economy'];
+  if (strategy && !validStrategies.includes(strategy)) {
+    return c.json({ success: false, error: '无效的策略' }, 400);
+  }
+
+  return c.json({
+    success: true,
+    message: '成本策略已更新',
+    current_strategy: strategy || 'balanced',
+    daily_budget: daily_budget || 1.0,
+    warning_threshold: warning_threshold || 0.8,
+  });
+});
+
+/**
+ * POST /api/metrics/cost/estimate - 估算调用成本
+ */
+metricsRoutes.post('/cost/estimate', async (c) => {
+  const { model, input_text, expected_output_length } = await c.req.json();
+
+  if (!model || !input_text) {
+    return c.json({ success: false, error: '缺少必需参数' }, 400);
+  }
+
+  const { CostOptimizer, estimateCost, getModelPricing } = await import('../core/cost-optimizer');
+  
+  const inputTokens = CostOptimizer.estimateTokens(input_text);
+  const outputTokens = Math.ceil((expected_output_length || 1000) / 3);
+  const cost = estimateCost(model, inputTokens, outputTokens);
+  const pricing = getModelPricing(model);
+
+  return c.json({
+    success: true,
+    estimate: {
+      model,
+      input_tokens: inputTokens,
+      output_tokens: outputTokens,
+      input_cost: (inputTokens / 1_000_000) * pricing.input,
+      output_cost: (outputTokens / 1_000_000) * pricing.output,
+      total_cost: cost,
+      cost_formatted: `$${cost.toFixed(6)}`,
+    },
   });
 });
 

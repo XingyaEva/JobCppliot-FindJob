@@ -20,40 +20,13 @@ export interface JDPreprocessOutput {
   sourceType: 'image' | 'text';
 }
 
-// 图片识别 Prompt
-const IMAGE_SYSTEM_PROMPT = `你是一个专业的文字识别专家。
+import { JD_PREPROCESS_PROMPT_IMAGE, JD_PREPROCESS_PROMPT_TEXT } from '../core/prompt-templates';
 
-## 任务
-请识别图片中的招聘岗位描述(JD)文字内容，并完整输出。
-
-## 要求
-1. 完整识别图片中的所有文字内容
-2. 保持原有的段落结构和层次
-3. 区分"岗位职责"、"任职要求"、"加分项"等不同部分
-4. 忽略与岗位描述无关的内容（如广告、导航栏等）
-5. 如果图片中包含公司名称和岗位名称，请保留
-
-## 输出格式
-直接输出识别到的JD文本内容，保持原有格式。`;
+// 使用优化后的 Prompt
+const IMAGE_SYSTEM_PROMPT = JD_PREPROCESS_PROMPT_IMAGE;
 
 const IMAGE_USER_PROMPT = `请识别这张招聘JD截图中的所有文字内容。`;
-
-// 文本清洗 Prompt
-const TEXT_SYSTEM_PROMPT = `你是一个专业的文本处理专家。
-
-## 任务
-请清洗和规范化用户提供的招聘岗位描述(JD)文本。
-
-## 清洗规则
-1. 去除多余的空白字符和换行
-2. 修正明显的格式问题
-3. 保持"岗位职责"、"任职要求"、"加分项"等结构
-4. 去除无关内容（如"点击投递"、"分享"等操作提示）
-5. 保留公司名称、岗位名称、薪资、地点等关键信息
-6. 如果内容已经比较规范，可以直接返回原文
-
-## 输出格式
-直接输出清洗后的JD文本内容。`;
+const TEXT_SYSTEM_PROMPT = JD_PREPROCESS_PROMPT_TEXT;
 
 /**
  * 执行JD预处理

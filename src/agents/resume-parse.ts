@@ -4,6 +4,7 @@
  */
 
 import { chat, parseJsonResponse, MODELS } from '../core/api-client';
+import { RESUME_PARSE_PROMPT } from '../core/prompt-templates';
 import type { AgentResult, Resume } from '../types';
 
 /** 解析输入 */
@@ -47,95 +48,8 @@ export interface ResumeParseOutput {
   };
 }
 
-// 系统提示词
-const SYSTEM_PROMPT = `你是一个专业的简历分析专家，擅长从简历中提取结构化信息和能力标签。
-
-## 任务
-请将用户提供的简历文本提取为结构化JSON格式，并生成能力标签。
-
-## 输出JSON Schema
-{
-  "basic_info": {
-    "name": "姓名",
-    "contact": "联系方式（邮箱/电话）",
-    "target_position": "目标岗位/求职意向"
-  },
-  "education": [
-    {
-      "school": "学校名称",
-      "major": "专业",
-      "degree": "学历（本科/硕士/博士）",
-      "duration": "时间段"
-    }
-  ],
-  "work_experience": [
-    {
-      "company": "公司名称",
-      "position": "职位",
-      "duration": "时间段",
-      "description": "工作描述（合并为一段）"
-    }
-  ],
-  "projects": [
-    {
-      "name": "项目名称",
-      "role": "担任角色",
-      "duration": "时间段",
-      "description": "项目描述",
-      "achievements": ["成果1", "成果2"],
-      "tech_stack": ["技术1", "技术2"]
-    }
-  ],
-  "skills": ["技能1", "技能2", ...],
-  "ability_tags": {
-    "industry": ["行业标签1", "行业标签2"],
-    "technology": ["技术标签1", "技术标签2"],
-    "product": ["产品标签1", "产品标签2"],
-    "capability": ["能力标签1", "能力标签2"]
-  }
-}
-
-## 能力标签提取规则
-
-### industry（行业标签）
-从工作经历中提取所涉及的行业，如：
-- 金融科技、银行、保险、证券
-- 电商、零售、新零售
-- 医疗健康、医药
-- 教育、在线教育
-- 企业服务、SaaS
-- 社交、内容、娱乐
-- 物流、供应链
-- 制造、工业互联网
-
-### technology（技术标签）
-从技能和项目中提取技术能力，如：
-- 编程语言：Python、Java、SQL等
-- AI相关：机器学习、NLP、CV、大模型
-- 数据：数据分析、数据挖掘、BI
-- 其他：云计算、微服务、数据库等
-
-### product（产品标签）
-从经历中提取产品类型经验，如：
-- ToB、ToC、ToG
-- SaaS、PaaS、平台型
-- 移动端、Web端、小程序
-- 0-1经验、全周期经验
-- 数据产品、AI产品、工具产品
-
-### capability（能力标签）
-从经历中提取核心能力，如：
-- 需求分析、产品设计、原型设计
-- 项目管理、跨部门协作
-- 数据驱动、A/B测试
-- 用户研究、竞品分析
-- 商业分析、战略规划
-
-## 注意事项
-- 每个字段尽量从简历中提取，没有的填空字符串或空数组
-- 能力标签要基于简历内容推断，不要凭空编造
-- 标签要简洁，每个标签2-6个字
-- 直接输出JSON，不要添加markdown代码块`;
+// 使用优化后的 Prompt
+const SYSTEM_PROMPT = RESUME_PARSE_PROMPT;
 
 /**
  * 执行简历解析

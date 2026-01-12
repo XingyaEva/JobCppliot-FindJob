@@ -4,6 +4,7 @@
  */
 
 import { chat, parseJsonResponse, MODELS } from '../core/api-client';
+import { INTERVIEW_PREP_PROMPT } from '../core/prompt-templates';
 import type { AgentResult, Resume, Match } from '../types';
 import type { CompanyAnalyzeOutput } from './company-analyze';
 
@@ -83,8 +84,10 @@ export interface InterviewPrepOutput {
   };
 }
 
-// 系统提示词
-const SYSTEM_PROMPT = `你是一个资深的面试教练，擅长帮助求职者准备面试。你需要根据岗位要求、简历内容和匹配分析，生成个性化的面试准备材料。
+// 使用优化后的 Prompt
+const SYSTEM_PROMPT = INTERVIEW_PREP_PROMPT;
+
+const SYSTEM_PROMPT_LEGACY = `你是一个资深的面试教练，擅长帮助求职者准备面试。你需要根据岗位要求、简历内容和匹配分析，生成个性化的面试准备材料。
 
 ## 任务
 生成完整的面试准备材料，包括：
