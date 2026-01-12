@@ -50,7 +50,7 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 - [x] **优化记录保存**: 保存优化历史到localStorage
 - [x] **一键复制**: 支持复制各段优化内容或全部内容
 
-#### Phase 5 ✅ 进行中
+#### Phase 5 ✅ 已完成
 - [x] **统一导航栏**: 全站统一的顶部导航，支持响应式
 - [x] **面包屑导航**: 各页面显示当前位置和返回路径
 - [x] **使用流程指引**: 首页展示5步流程，实时显示完成状态
@@ -62,15 +62,22 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 - [x] **骨架屏加载**: 列表页显示骨架屏优化加载体验
 - [x] **Toast通知**: 操作反馈统一使用Toast提示
 - [x] **响应式优化**: 移动端适配，导航栏和布局优化
-- [ ] **Cloudflare Pages部署**: 待配置API密钥
+- [x] **Cloudflare Pages部署**: ✅ 已部署到生产环境
 
 ### 待开发功能
 
-- [ ] Phase 5: Cloudflare Pages 生产部署
 - [ ] Phase 6: 模型评测与优化
 
 ## 访问地址
 
+### 🌐 生产环境（Cloudflare Pages）
+- **首页**: https://job-copilot.pages.dev
+- **新建岗位**: https://job-copilot.pages.dev/job/new
+- **岗位库**: https://job-copilot.pages.dev/jobs
+- **我的简历**: https://job-copilot.pages.dev/resume
+- **API健康检查**: https://job-copilot.pages.dev/api/health
+
+### 🔧 开发环境（沙箱）
 - **沙箱预览**: https://3000-i6as8vu96xqdxc2jivh8w-ad490db5.sandbox.novita.ai
 - **新建岗位**: https://3000-i6as8vu96xqdxc2jivh8w-ad490db5.sandbox.novita.ai/job/new
 - **岗位库**: https://3000-i6as8vu96xqdxc2jivh8w-ad490db5.sandbox.novita.ai/jobs
@@ -223,7 +230,7 @@ curl http://localhost:3000/api/health
 
 ## 更新日志
 
-### 2026-01-12 - Phase 5 进行中
+### 2026-01-12 - Phase 5 完成 🎉
 - 实现统一导航栏（响应式设计）
 - 添加面包屑导航
 - 实现使用流程指引（首页5步流程）
@@ -231,6 +238,8 @@ curl http://localhost:3000/api/health
 - 添加骨架屏加载效果
 - 统一Toast通知
 - 响应式布局优化
+- **Cloudflare Pages 生产部署完成**
+  - 生产地址: https://job-copilot.pages.dev
 
 ### 2026-01-12 - Phase 4 完成
 - 实现简历优化 Agent
@@ -255,5 +264,6 @@ curl http://localhost:3000/api/health
 
 ---
 
-**开发阶段**: Phase 5 - 体验优化 ✅
-**下一阶段**: Cloudflare Pages 生产部署（需配置API密钥）
+**开发阶段**: Phase 5 - 体验优化 ✅ 已完成
+**生产地址**: https://job-copilot.pages.dev
+**下一阶段**: Phase 6 - 模型评测与优化
