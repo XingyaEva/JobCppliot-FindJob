@@ -30,6 +30,7 @@ async function runJDParseDAG(
   aAnalysis?: AAnalysis;
   bAnalysis?: any;
   error?: string;
+  metrics?: any[];
 }> {
   const dag = new DAGExecutor();
   
@@ -112,8 +113,11 @@ async function runJDParseDAG(
   // 收集结果
   const results = dag.getResults();
   
+  // 获取评测数据
+  const metrics = dag.getMetrics();
+  
   if (finalState.error) {
-    return { success: false, error: finalState.error };
+    return { success: false, error: finalState.error, metrics };
   }
 
   return {
@@ -122,6 +126,7 @@ async function runJDParseDAG(
     structuredJD: results['structure'],
     aAnalysis: results['analysis-a'],
     bAnalysis: results['analysis-b'],
+    metrics,
   };
 }
 
@@ -270,6 +275,7 @@ jobRoutes.post('/parse-sync', async (c) => {
       success: true,
       job,
       dagState: dagStates.get(jobId),
+      metrics: result.metrics,
     });
   } catch (error) {
     console.error('[API] 同步解析失败:', error);

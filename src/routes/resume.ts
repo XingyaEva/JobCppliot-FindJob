@@ -26,6 +26,7 @@ async function runResumeParseDAG(
   cleanedText?: string;
   parsedResume?: ResumeParseOutput;
   error?: string;
+  metrics?: any[];
 }> {
   const dag = new DAGExecutor();
 
@@ -68,15 +69,19 @@ async function runResumeParseDAG(
 
   // 收集结果
   const results = dag.getResults();
+  
+  // 获取评测数据
+  const metrics = dag.getMetrics();
 
   if (finalState.error) {
-    return { success: false, error: finalState.error };
+    return { success: false, error: finalState.error, metrics };
   }
 
   return {
     success: true,
     cleanedText,
     parsedResume: results['parse'],
+    metrics,
   };
 }
 
@@ -136,6 +141,7 @@ resumeRoutes.post('/parse', async (c) => {
       resumeId,
       resume,
       dagState: dagStates.get(resumeId),
+      metrics: result.metrics,
     });
   } catch (error) {
     console.error('[API] 简历解析失败:', error);
@@ -292,6 +298,7 @@ matchRoutes.post('/:id/match', async (c) => {
     return c.json({
       success: true,
       match,
+      metrics: result.metrics,
     });
   } catch (error) {
     console.error('[API] 匹配评估失败:', error);

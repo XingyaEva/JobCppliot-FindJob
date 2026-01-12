@@ -4,7 +4,9 @@
  */
 
 import { chat, parseJsonResponse, MODELS } from '../core/api-client';
+import { experimentManager } from '../core/experiment';
 import type { AgentResult, Resume, AAnalysis, BAnalysis, Match, MatchLevel, DimensionMatch } from '../types';
+import type { AgentResultWithMetrics } from './base';
 
 /** 匹配评估输入 */
 export interface MatchEvaluateInput {
@@ -145,11 +147,19 @@ const SYSTEM_PROMPT = `你是一个资深的招聘匹配分析专家，擅长评
  */
 export async function executeMatchEvaluate(
   input: MatchEvaluateInput
-): Promise<AgentResult<MatchEvaluateOutput>> {
+): Promise<AgentResultWithMetrics<MatchEvaluateOutput>> {
   const startTime = Date.now();
+  const agentName = 'match-evaluate';
+  
+  // 检查实验配置
+  const experimentResult = experimentManager.getModelForAgent(agentName);
+  const model = experimentResult?.model || MODELS.HIGH;
+  
+  let inputMessage = '';
+  let outputContent = '';
 
   try {
-    console.log('[匹配评估] 开始评估简历与岗位的匹配度');
+    console.log(`[匹配评估] 开始评估简历与岗位的匹配度，模型: ${model}`);
 
     // 构建用户消息
     const userMessage = `请评估以下简历与岗位的匹配度：
@@ -197,11 +207,15 @@ ${input.resume.skills.join('、') || '无'}
 - 产品：${input.resume.ability_tags.product.join('、') || '无'}
 - 能力：${input.resume.ability_tags.capability.join('、') || '无'}`;
 
+    inputMessage = SYSTEM_PROMPT + '\n' + userMessage;
+
     const response = await chat(
       SYSTEM_PROMPT,
       userMessage,
-      { model: MODELS.HIGH, jsonMode: true }
+      { model, jsonMode: true }
     );
+    
+    outputContent = response;
 
     // 解析JSON响应
     const evaluation = parseJsonResponse<MatchEvaluateOutput>(response);
@@ -247,21 +261,64 @@ ${input.resume.skills.join('、') || '无'}
       interview_focus_suggestion: evaluation.interview_focus_suggestion || '',
     };
 
-    console.log('[匹配评估] 评估完成:', result.match_level, result.match_score);
+    const duration_ms = Date.now() - startTime;
+    console.log('[匹配评估] 评估完成:', result.match_level, result.match_score, `耗时: ${duration_ms}ms`);
+
+    // 生成评测数据
+    const inputTokens = Math.ceil(inputMessage.length / 4);
+    const outputTokens = Math.ceil(outputContent.length / 4);
+    const pricing: Record<string, { input: number; output: number }> = {
+      'gpt-4.1': { input: 2.00, output: 8.00 },
+      'gpt-4o': { input: 2.50, output: 10.00 },
+      'qwen-max': { input: 20, output: 60 },
+      'deepseek-v3': { input: 0.27, output: 1.10 },
+    };
+    const price = pricing[model] || { input: 2.0, output: 8.0 };
+    const cost = (inputTokens / 1_000_000) * price.input + (outputTokens / 1_000_000) * price.output;
 
     return {
       success: true,
       data: result,
-      duration_ms: Date.now() - startTime,
+      duration_ms,
+      metrics: {
+        agent_name: agentName,
+        model,
+        input_chars: inputMessage.length,
+        output_chars: outputContent.length,
+        input_tokens_est: inputTokens,
+        output_tokens_est: outputTokens,
+        duration_ms,
+        cost_usd_est: cost,
+        success: true,
+        timestamp: new Date().toISOString(),
+        experiment: experimentResult ? {
+          id: experimentResult.experimentId,
+          group: experimentResult.group,
+        } : undefined,
+      },
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : '未知错误';
+    const duration_ms = Date.now() - startTime;
     console.error('[匹配评估] 执行失败:', errorMessage);
 
     return {
       success: false,
       error: errorMessage,
-      duration_ms: Date.now() - startTime,
+      duration_ms,
+      metrics: {
+        agent_name: agentName,
+        model,
+        input_chars: inputMessage.length,
+        output_chars: 0,
+        input_tokens_est: Math.ceil(inputMessage.length / 4),
+        output_tokens_est: 0,
+        duration_ms,
+        cost_usd_est: 0,
+        success: false,
+        error: errorMessage,
+        timestamp: new Date().toISOString(),
+      },
     };
   }
 }

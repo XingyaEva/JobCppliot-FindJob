@@ -211,6 +211,69 @@ export const renderer = jsxRenderer(({ children, title }) => {
                 resumeName: resumes[0] && resumes[0].basic_info ? resumes[0].basic_info.name : '未上传'
               };
             };
+
+            // ========== 评测数据收集 ==========
+            var METRICS_KEY = 'jobcopilot_metrics';
+            var MAX_METRICS = 1000;
+
+            // 保存评测数据
+            window.JobCopilot.saveMetrics = function(metrics) {
+              if (!metrics) return;
+              try {
+                var data = JSON.parse(localStorage.getItem(METRICS_KEY) || '[]');
+                // 添加唯一 ID
+                metrics.id = 'metric_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+                data.push(metrics);
+                // 限制数量
+                if (data.length > MAX_METRICS) {
+                  data = data.slice(-MAX_METRICS);
+                }
+                localStorage.setItem(METRICS_KEY, JSON.stringify(data));
+                console.log('[Metrics] 已保存评测数据:', metrics.agent_name, metrics.model, metrics.duration_ms + 'ms');
+              } catch (e) {
+                console.error('[Metrics] 保存失败:', e);
+              }
+            };
+
+            // 批量保存评测数据
+            window.JobCopilot.saveMetricsBatch = function(metricsArray) {
+              if (!metricsArray || !Array.isArray(metricsArray)) return;
+              metricsArray.forEach(function(m) {
+                JobCopilot.saveMetrics(m);
+              });
+            };
+
+            // 获取评测数据
+            window.JobCopilot.getMetrics = function() {
+              try {
+                return JSON.parse(localStorage.getItem(METRICS_KEY) || '[]');
+              } catch (e) {
+                return [];
+              }
+            };
+
+            // 清空评测数据
+            window.JobCopilot.clearMetrics = function() {
+              localStorage.removeItem(METRICS_KEY);
+              console.log('[Metrics] 评测数据已清空');
+            };
+
+            // ========== 实验配置 ==========
+            var EXPERIMENTS_KEY = 'jobcopilot_experiments';
+
+            // 获取实验配置
+            window.JobCopilot.getExperiments = function() {
+              try {
+                return JSON.parse(localStorage.getItem(EXPERIMENTS_KEY) || '[]');
+              } catch (e) {
+                return [];
+              }
+            };
+
+            // 保存实验配置
+            window.JobCopilot.saveExperiments = function(experiments) {
+              localStorage.setItem(EXPERIMENTS_KEY, JSON.stringify(experiments));
+            };
           `
         }} />
       </body>

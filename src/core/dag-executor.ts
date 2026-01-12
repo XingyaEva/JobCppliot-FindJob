@@ -4,6 +4,26 @@
  */
 
 import type { DAGNode, DAGState, AgentStatus, AgentResult } from '../types';
+import type { AgentResultWithMetrics } from '../agents/base';
+
+/** 评测数据 */
+export interface MetricsData {
+  agent_name: string;
+  model: string;
+  input_chars: number;
+  output_chars: number;
+  input_tokens_est: number;
+  output_tokens_est: number;
+  duration_ms: number;
+  cost_usd_est: number;
+  success: boolean;
+  error?: string;
+  timestamp: string;
+  experiment?: {
+    id: string;
+    group: 'control' | 'treatment';
+  };
+}
 
 /** DAG节点配置 */
 export interface DAGNodeConfig {
@@ -11,7 +31,7 @@ export interface DAGNodeConfig {
   name: string;
   agent: string;
   dependencies: string[];
-  execute: (inputs: Record<string, any>) => Promise<AgentResult>;
+  execute: (inputs: Record<string, any>) => Promise<AgentResult | AgentResultWithMetrics<any>>;
 }
 
 /** DAG执行器 */
@@ -20,6 +40,7 @@ export class DAGExecutor {
   private results: Map<string, AgentResult> = new Map();
   private status: Map<string, AgentStatus> = new Map();
   private listeners: Array<(state: DAGState) => void> = [];
+  private metricsCollection: MetricsData[] = [];
 
   constructor() {}
 
@@ -195,9 +216,15 @@ export class DAGExecutor {
       const inputs = this.getNodeInputs(nodeId);
       console.log(`[DAG] 开始执行节点: ${node.name}`);
       
-      const result = await node.execute(inputs);
+      const result = await node.execute(inputs) as AgentResultWithMetrics<any>;
       this.results.set(nodeId, result);
       this.status.set(nodeId, result.success ? 'completed' : 'error');
+      
+      // 收集评测数据
+      if (result.metrics) {
+        this.metricsCollection.push(result.metrics);
+        console.log(`[DAG] 收集评测数据: ${result.metrics.agent_name}, ${result.metrics.model}, ${result.metrics.duration_ms}ms`);
+      }
       
       console.log(`[DAG] 节点完成: ${node.name}, 成功: ${result.success}`);
     } catch (error) {
@@ -277,8 +304,16 @@ export class DAGExecutor {
    */
   reset(): void {
     this.results.clear();
+    this.metricsCollection = [];
     this.status.forEach((_, id) => this.status.set(id, 'pending'));
     this.notifyStateChange();
+  }
+
+  /**
+   * 获取收集的评测数据
+   */
+  getMetrics(): MetricsData[] {
+    return [...this.metricsCollection];
   }
 }
 

@@ -5,13 +5,13 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 ## 项目概述
 
 - **名称**: Job Copilot
-- **版本**: v0.6.0
+- **版本**: v0.7.0
 - **目标**: 为AI/产品/技术类求职者提供智能求职助手
-- **核心功能**: JD解析、简历上传匹配、公司分析、面试准备、简历优化
+- **核心功能**: JD解析、简历上传匹配、公司分析、面试准备、简历优化、模型评测
 
 ## 当前状态
 
-**Phase 5 - 体验优化** ✅ 进行中
+**Phase 6 - 模型评测与优化** 🔄 进行中
 
 ### 已实现功能
 
@@ -64,9 +64,17 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 - [x] **响应式优化**: 移动端适配，导航栏和布局优化
 - [x] **Cloudflare Pages部署**: ✅ 已部署到生产环境
 
+#### Phase 6 🔄 进行中
+- [x] **评测框架搭建**: metrics.ts 评测数据收集器
+- [x] **评测数据采集**: Agent 执行自动记录评测数据
+- [x] **评测仪表盘**: /metrics 可视化页面，图表展示
+- [x] **模型对比实验**: A/B 测试不同模型配置
+- [ ] **Prompt 优化**: 基于评测结果优化 Agent Prompt
+- [ ] **成本优化**: 分析 Token 消耗，优化模型选择
+
 ### 待开发功能
 
-- [ ] Phase 6: 模型评测与优化
+- [ ] Phase 6 剩余: Prompt 优化、成本优化
 
 ## 访问地址
 
@@ -75,6 +83,7 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 - **新建岗位**: https://job-copilot.pages.dev/job/new
 - **岗位库**: https://job-copilot.pages.dev/jobs
 - **我的简历**: https://job-copilot.pages.dev/resume
+- **评测仪表盘**: https://job-copilot.pages.dev/metrics
 - **API健康检查**: https://job-copilot.pages.dev/api/health
 
 ### 🔧 开发环境（沙箱）
@@ -230,6 +239,19 @@ curl http://localhost:3000/api/health
 
 ## 更新日志
 
+### 2026-01-12 - Phase 6 进行中 🔄
+- 实现评测数据收集框架 (metrics.ts)
+- 实现实验配置管理 (experiment.ts)
+- 创建评测仪表盘页面 (/metrics)
+  - 总览卡片：调用次数、成功率、平均耗时、成本
+  - 调用趋势图表
+  - 模型使用分布饼图
+  - Agent 性能对比表
+  - 实验管理面板
+  - 调用日志列表
+- 修改 Agent 基类自动记录评测数据
+- 前端自动保存评测数据到 localStorage
+
 ### 2026-01-12 - Phase 5 完成 🎉
 - 实现统一导航栏（响应式设计）
 - 添加面包屑导航
@@ -264,6 +286,6 @@ curl http://localhost:3000/api/health
 
 ---
 
-**开发阶段**: Phase 5 - 体验优化 ✅ 已完成
+**开发阶段**: Phase 6 - 模型评测与优化 🔄 进行中
 **生产地址**: https://job-copilot.pages.dev
-**下一阶段**: Phase 6 - 模型评测与优化
+**评测仪表盘**: https://job-copilot.pages.dev/metrics

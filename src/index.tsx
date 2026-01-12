@@ -11,6 +11,7 @@ import jobRoutes from './routes/job'
 import resumeRoutes, { matchRoutes } from './routes/resume'
 import interviewRoutes from './routes/interview'
 import optimizeRoutes from './routes/optimize'
+import { metricsRoutes } from './routes/metrics'
 
 // 创建应用实例
 const app = new Hono()
@@ -44,6 +45,9 @@ app.get('/', (c) => {
               </a>
               <a href="/resume" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-file-alt mr-1.5"></i><span class="hidden sm:inline">我的简历</span>
+              </a>
+              <a href="/metrics" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-chart-bar mr-1.5"></i><span class="hidden sm:inline">评测</span>
               </a>
             </nav>
             <div class="flex items-center gap-2">
@@ -442,6 +446,11 @@ app.get('/job/new', (c) => {
                     renderDAGNodes(result.dagState.nodes);
                   }
                   
+                  // 保存评测数据
+                  if (result.metrics && window.JobCopilot && window.JobCopilot.saveMetricsBatch) {
+                    window.JobCopilot.saveMetricsBatch(result.metrics);
+                  }
+                  
                   // 跳转到详情页
                   setTimeout(() => {
                     // 将结果存储到localStorage
@@ -783,6 +792,9 @@ app.get('/jobs', (c) => {
               </a>
               <a href="/resume" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-file-alt mr-1.5"></i><span class="hidden sm:inline">我的简历</span>
+              </a>
+              <a href="/metrics" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-chart-bar mr-1.5"></i><span class="hidden sm:inline">评测</span>
               </a>
             </nav>
             <a href="/job/new" class="px-3 py-1.5 bg-black text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
@@ -1234,6 +1246,11 @@ app.get('/resume', (c) => {
                     renderDAGNodes(result.dagState.nodes);
                   }
                   
+                  // 保存评测数据
+                  if (result.metrics && window.JobCopilot && window.JobCopilot.saveMetricsBatch) {
+                    window.JobCopilot.saveMetricsBatch(result.metrics);
+                  }
+                  
                   // 保存到localStorage
                   const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
                   resumes.unshift(result.resume);
@@ -1435,6 +1452,11 @@ app.get('/job/:id/match', (c) => {
 
               if (!result.success) {
                 throw new Error(result.error || '匹配分析失败');
+              }
+
+              // 保存评测数据
+              if (result.metrics && window.JobCopilot && window.JobCopilot.saveMetrics) {
+                window.JobCopilot.saveMetrics(result.metrics);
               }
 
               const match = result.match;
@@ -3087,6 +3109,638 @@ app.get('/job/:id/optimize', (c) => {
   )
 })
 
+// ==================== 评测仪表盘页面 ====================
+app.get('/metrics', (c) => {
+  return c.render(
+    <div class="min-h-screen bg-gray-50 flex flex-col">
+      {/* 导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/" class="flex items-center gap-2 font-bold text-lg">
+              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
+                <i class="fas fa-robot"></i>
+              </span>
+              <span class="hidden sm:inline">Job Copilot</span>
+            </a>
+            <nav class="flex items-center gap-1">
+              <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-home mr-1.5"></i><span class="hidden sm:inline">首页</span>
+              </a>
+              <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
+              </a>
+              <a href="/resume" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-file-alt mr-1.5"></i><span class="hidden sm:inline">我的简历</span>
+              </a>
+              <a href="/metrics" class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-900">
+                <i class="fas fa-chart-bar mr-1.5"></i><span class="hidden sm:inline">评测</span>
+              </a>
+            </nav>
+            <div class="flex items-center gap-2">
+              <a href="/job/new" class="px-3 py-1.5 bg-black text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+                <i class="fas fa-plus mr-1"></i><span class="hidden sm:inline">新建</span>
+              </a>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* 面包屑 */}
+      <div class="bg-white border-b">
+        <div class="max-w-7xl mx-auto px-4 py-3">
+          <div class="flex items-center text-sm text-gray-500">
+            <a href="/" class="hover:text-gray-700">首页</a>
+            <span class="mx-2">/</span>
+            <span class="text-gray-900 font-medium">评测仪表盘</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 主内容 */}
+      <main class="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
+        {/* 页面标题 */}
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-2xl font-bold text-gray-900">
+              <i class="fas fa-chart-bar mr-2 text-blue-500"></i>
+              模型评测仪表盘
+            </h1>
+            <p class="text-gray-500 mt-1">监控 Agent 性能、质量和成本</p>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="refresh-btn" class="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border rounded-lg hover:bg-gray-50">
+              <i class="fas fa-sync-alt mr-1"></i> 刷新
+            </button>
+            <button id="export-btn" class="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border rounded-lg hover:bg-gray-50">
+              <i class="fas fa-download mr-1"></i> 导出
+            </button>
+            <button id="clear-btn" class="px-3 py-2 text-sm text-red-600 hover:text-red-700 border border-red-200 rounded-lg hover:bg-red-50">
+              <i class="fas fa-trash mr-1"></i> 清空
+            </button>
+          </div>
+        </div>
+
+        {/* Tab 切换 */}
+        <div class="flex border-b mb-6">
+          <button id="tab-overview" class="px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-600">
+            总览
+          </button>
+          <button id="tab-agents" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent">
+            Agent 详情
+          </button>
+          <button id="tab-experiments" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent">
+            实验管理
+          </button>
+          <button id="tab-logs" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent">
+            调用日志
+          </button>
+        </div>
+
+        {/* 总览面板 */}
+        <div id="panel-overview">
+          {/* 统计卡片 */}
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div class="bg-white rounded-xl p-4 border shadow-sm">
+              <div class="text-sm text-gray-500 mb-1">总调用次数</div>
+              <div id="stat-total-calls" class="text-2xl font-bold text-gray-900">0</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 border shadow-sm">
+              <div class="text-sm text-gray-500 mb-1">成功率</div>
+              <div id="stat-success-rate" class="text-2xl font-bold text-green-600">0%</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 border shadow-sm">
+              <div class="text-sm text-gray-500 mb-1">平均耗时</div>
+              <div id="stat-avg-duration" class="text-2xl font-bold text-blue-600">0ms</div>
+            </div>
+            <div class="bg-white rounded-xl p-4 border shadow-sm">
+              <div class="text-sm text-gray-500 mb-1">预估总成本</div>
+              <div id="stat-total-cost" class="text-2xl font-bold text-purple-600">$0.00</div>
+            </div>
+          </div>
+
+          {/* 图表区域 */}
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            {/* 调用趋势 */}
+            <div class="bg-white rounded-xl p-4 border shadow-sm">
+              <h3 class="font-semibold text-gray-900 mb-4">
+                <i class="fas fa-chart-line mr-2 text-blue-500"></i>
+                调用趋势
+              </h3>
+              <canvas id="chart-calls" height="200"></canvas>
+            </div>
+            {/* 模型使用分布 */}
+            <div class="bg-white rounded-xl p-4 border shadow-sm">
+              <h3 class="font-semibold text-gray-900 mb-4">
+                <i class="fas fa-chart-pie mr-2 text-purple-500"></i>
+                模型使用分布
+              </h3>
+              <canvas id="chart-models" height="200"></canvas>
+            </div>
+          </div>
+
+          {/* Agent 性能对比 */}
+          <div class="bg-white rounded-xl p-4 border shadow-sm">
+            <h3 class="font-semibold text-gray-900 mb-4">
+              <i class="fas fa-robot mr-2 text-green-500"></i>
+              Agent 性能对比
+            </h3>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b">
+                    <th class="text-left py-2 px-3 font-medium text-gray-600">Agent</th>
+                    <th class="text-right py-2 px-3 font-medium text-gray-600">调用次数</th>
+                    <th class="text-right py-2 px-3 font-medium text-gray-600">成功率</th>
+                    <th class="text-right py-2 px-3 font-medium text-gray-600">平均耗时</th>
+                    <th class="text-right py-2 px-3 font-medium text-gray-600">总成本</th>
+                  </tr>
+                </thead>
+                <tbody id="agent-stats-table">
+                  <tr>
+                    <td colspan="5" class="py-8 text-center text-gray-400">
+                      <i class="fas fa-inbox text-2xl mb-2"></i>
+                      <div>暂无数据</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        {/* Agent 详情面板 */}
+        <div id="panel-agents" class="hidden">
+          <div class="bg-white rounded-xl p-4 border shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-semibold text-gray-900">
+                <i class="fas fa-list mr-2 text-blue-500"></i>
+                Agent 详细性能
+              </h3>
+              <select id="agent-filter" class="px-3 py-1.5 text-sm border rounded-lg">
+                <option value="">全部 Agent</option>
+              </select>
+            </div>
+            <div id="agent-details-content">
+              <div class="py-8 text-center text-gray-400">
+                <i class="fas fa-inbox text-2xl mb-2"></i>
+                <div>暂无数据</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 实验管理面板 */}
+        <div id="panel-experiments" class="hidden">
+          <div class="bg-white rounded-xl p-4 border shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-semibold text-gray-900">
+                <i class="fas fa-flask mr-2 text-purple-500"></i>
+                A/B 测试实验
+              </h3>
+            </div>
+            <div id="experiments-list">
+              <div class="py-8 text-center text-gray-400">
+                <i class="fas fa-flask text-2xl mb-2"></i>
+                <div>加载中...</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 调用日志面板 */}
+        <div id="panel-logs" class="hidden">
+          <div class="bg-white rounded-xl p-4 border shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+              <h3 class="font-semibold text-gray-900">
+                <i class="fas fa-history mr-2 text-gray-500"></i>
+                最近调用记录
+              </h3>
+              <div class="flex items-center gap-2">
+                <select id="log-agent-filter" class="px-3 py-1.5 text-sm border rounded-lg">
+                  <option value="">全部 Agent</option>
+                </select>
+                <select id="log-status-filter" class="px-3 py-1.5 text-sm border rounded-lg">
+                  <option value="">全部状态</option>
+                  <option value="true">成功</option>
+                  <option value="false">失败</option>
+                </select>
+              </div>
+            </div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-sm">
+                <thead>
+                  <tr class="border-b">
+                    <th class="text-left py-2 px-3 font-medium text-gray-600">时间</th>
+                    <th class="text-left py-2 px-3 font-medium text-gray-600">Agent</th>
+                    <th class="text-left py-2 px-3 font-medium text-gray-600">模型</th>
+                    <th class="text-right py-2 px-3 font-medium text-gray-600">耗时</th>
+                    <th class="text-right py-2 px-3 font-medium text-gray-600">Token</th>
+                    <th class="text-right py-2 px-3 font-medium text-gray-600">成本</th>
+                    <th class="text-center py-2 px-3 font-medium text-gray-600">状态</th>
+                  </tr>
+                </thead>
+                <tbody id="logs-table">
+                  <tr>
+                    <td colspan="7" class="py-8 text-center text-gray-400">
+                      <i class="fas fa-inbox text-2xl mb-2"></i>
+                      <div>暂无调用记录</div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </main>
+
+      {/* Chart.js CDN */}
+      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+      {/* 页面脚本 */}
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          const STORAGE_KEY = 'jobcopilot_metrics';
+          const EXPERIMENTS_KEY = 'jobcopilot_experiments';
+          let metricsData = [];
+          let experimentsData = [];
+          let callsChart = null;
+          let modelsChart = null;
+
+          // 加载数据
+          function loadData() {
+            try {
+              metricsData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+              experimentsData = JSON.parse(localStorage.getItem(EXPERIMENTS_KEY) || '[]');
+            } catch (e) {
+              console.error('Failed to load data:', e);
+              metricsData = [];
+              experimentsData = [];
+            }
+          }
+
+          // 保存数据
+          function saveMetrics() {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(metricsData));
+          }
+
+          function saveExperiments() {
+            localStorage.setItem(EXPERIMENTS_KEY, JSON.stringify(experimentsData));
+          }
+
+          // 计算汇总统计
+          function calculateSummary() {
+            if (metricsData.length === 0) {
+              return {
+                total_calls: 0,
+                success_count: 0,
+                success_rate: 0,
+                avg_duration_ms: 0,
+                total_cost_usd: 0,
+                by_agent: {},
+                by_model: {}
+              };
+            }
+
+            const successCount = metricsData.filter(m => m.success).length;
+            const totalDuration = metricsData.reduce((sum, m) => sum + m.duration_ms, 0);
+            const totalCost = metricsData.reduce((sum, m) => sum + (m.cost_usd_est || 0), 0);
+
+            // 按 Agent 分组
+            const byAgent = {};
+            metricsData.forEach(m => {
+              if (!byAgent[m.agent_name]) {
+                byAgent[m.agent_name] = { calls: 0, success: 0, duration: 0, cost: 0 };
+              }
+              byAgent[m.agent_name].calls++;
+              if (m.success) byAgent[m.agent_name].success++;
+              byAgent[m.agent_name].duration += m.duration_ms;
+              byAgent[m.agent_name].cost += m.cost_usd_est || 0;
+            });
+
+            // 按模型分组
+            const byModel = {};
+            metricsData.forEach(m => {
+              if (!byModel[m.model]) {
+                byModel[m.model] = { calls: 0, tokens: 0, cost: 0 };
+              }
+              byModel[m.model].calls++;
+              byModel[m.model].tokens += (m.input_tokens_est || 0) + (m.output_tokens_est || 0);
+              byModel[m.model].cost += m.cost_usd_est || 0;
+            });
+
+            return {
+              total_calls: metricsData.length,
+              success_count: successCount,
+              success_rate: successCount / metricsData.length,
+              avg_duration_ms: totalDuration / metricsData.length,
+              total_cost_usd: totalCost,
+              by_agent: byAgent,
+              by_model: byModel
+            };
+          }
+
+          // 更新统计卡片
+          function updateStats() {
+            const summary = calculateSummary();
+            
+            document.getElementById('stat-total-calls').textContent = summary.total_calls;
+            document.getElementById('stat-success-rate').textContent = 
+              (summary.success_rate * 100).toFixed(1) + '%';
+            document.getElementById('stat-avg-duration').textContent = 
+              summary.avg_duration_ms > 1000 
+                ? (summary.avg_duration_ms / 1000).toFixed(2) + 's'
+                : summary.avg_duration_ms.toFixed(0) + 'ms';
+            document.getElementById('stat-total-cost').textContent = 
+              '$' + summary.total_cost_usd.toFixed(4);
+
+            // 更新 Agent 表格
+            const agentTable = document.getElementById('agent-stats-table');
+            if (Object.keys(summary.by_agent).length === 0) {
+              agentTable.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-400"><i class="fas fa-inbox text-2xl mb-2"></i><div>暂无数据</div></td></tr>';
+            } else {
+              agentTable.innerHTML = Object.entries(summary.by_agent)
+                .sort((a, b) => b[1].calls - a[1].calls)
+                .map(([name, stats]) => \`
+                  <tr class="border-b hover:bg-gray-50">
+                    <td class="py-2 px-3 font-medium">\${name}</td>
+                    <td class="py-2 px-3 text-right">\${stats.calls}</td>
+                    <td class="py-2 px-3 text-right">
+                      <span class="\${stats.success / stats.calls > 0.9 ? 'text-green-600' : 'text-yellow-600'}">
+                        \${(stats.success / stats.calls * 100).toFixed(1)}%
+                      </span>
+                    </td>
+                    <td class="py-2 px-3 text-right">\${(stats.duration / stats.calls).toFixed(0)}ms</td>
+                    <td class="py-2 px-3 text-right">$\${stats.cost.toFixed(4)}</td>
+                  </tr>
+                \`).join('');
+            }
+
+            // 更新 Agent 筛选器
+            const agentFilter = document.getElementById('agent-filter');
+            const logAgentFilter = document.getElementById('log-agent-filter');
+            const agentNames = [...new Set(metricsData.map(m => m.agent_name))];
+            const agentOptions = '<option value="">全部 Agent</option>' + 
+              agentNames.map(name => '<option value="' + name + '">' + name + '</option>').join('');
+            agentFilter.innerHTML = agentOptions;
+            logAgentFilter.innerHTML = agentOptions;
+          }
+
+          // 更新图表
+          function updateCharts() {
+            const summary = calculateSummary();
+
+            // 调用趋势图
+            const callsCtx = document.getElementById('chart-calls');
+            if (callsChart) callsChart.destroy();
+
+            // 按小时分组
+            const hourlyData = {};
+            metricsData.forEach(m => {
+              const hour = m.timestamp.slice(0, 13) + ':00';
+              hourlyData[hour] = (hourlyData[hour] || 0) + 1;
+            });
+            const sortedHours = Object.keys(hourlyData).sort().slice(-24);
+
+            callsChart = new Chart(callsCtx, {
+              type: 'line',
+              data: {
+                labels: sortedHours.map(h => h.slice(11, 16)),
+                datasets: [{
+                  label: '调用次数',
+                  data: sortedHours.map(h => hourlyData[h]),
+                  borderColor: '#3B82F6',
+                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                  fill: true,
+                  tension: 0.4
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                  y: { beginAtZero: true }
+                }
+              }
+            });
+
+            // 模型分布饼图
+            const modelsCtx = document.getElementById('chart-models');
+            if (modelsChart) modelsChart.destroy();
+
+            const modelNames = Object.keys(summary.by_model);
+            const modelColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
+
+            modelsChart = new Chart(modelsCtx, {
+              type: 'doughnut',
+              data: {
+                labels: modelNames,
+                datasets: [{
+                  data: modelNames.map(m => summary.by_model[m].calls),
+                  backgroundColor: modelColors.slice(0, modelNames.length)
+                }]
+              },
+              options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                  legend: { position: 'right' }
+                }
+              }
+            });
+          }
+
+          // 更新日志表格
+          function updateLogs() {
+            const agentFilter = document.getElementById('log-agent-filter').value;
+            const statusFilter = document.getElementById('log-status-filter').value;
+
+            let filtered = [...metricsData];
+            if (agentFilter) {
+              filtered = filtered.filter(m => m.agent_name === agentFilter);
+            }
+            if (statusFilter !== '') {
+              filtered = filtered.filter(m => m.success === (statusFilter === 'true'));
+            }
+
+            const logsTable = document.getElementById('logs-table');
+            if (filtered.length === 0) {
+              logsTable.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400"><i class="fas fa-inbox text-2xl mb-2"></i><div>暂无调用记录</div></td></tr>';
+            } else {
+              logsTable.innerHTML = filtered
+                .slice(-50)
+                .reverse()
+                .map(m => \`
+                  <tr class="border-b hover:bg-gray-50">
+                    <td class="py-2 px-3 text-gray-500">\${new Date(m.timestamp).toLocaleString('zh-CN')}</td>
+                    <td class="py-2 px-3 font-medium">\${m.agent_name}</td>
+                    <td class="py-2 px-3"><span class="px-2 py-0.5 bg-gray-100 rounded text-xs">\${m.model}</span></td>
+                    <td class="py-2 px-3 text-right">\${m.duration_ms}ms</td>
+                    <td class="py-2 px-3 text-right">\${(m.input_tokens_est || 0) + (m.output_tokens_est || 0)}</td>
+                    <td class="py-2 px-3 text-right">$\${(m.cost_usd_est || 0).toFixed(4)}</td>
+                    <td class="py-2 px-3 text-center">
+                      \${m.success 
+                        ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-100 text-green-700"><i class="fas fa-check mr-1"></i>成功</span>'
+                        : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-100 text-red-700"><i class="fas fa-times mr-1"></i>失败</span>'
+                      }
+                    </td>
+                  </tr>
+                \`).join('');
+            }
+          }
+
+          // 更新实验列表
+          function updateExperiments() {
+            // 默认实验模板
+            const defaultExperiments = [
+              { id: 'exp_1', name: 'JD B维度分析: GPT-4.1 vs DeepSeek', agent_name: 'jd-analysis-b', control: { model: 'gpt-4.1', weight: 50 }, treatment: { model: 'deepseek-v3', weight: 50 }, enabled: false },
+              { id: 'exp_2', name: '匹配评估: GPT-4.1 vs Qwen-Max', agent_name: 'match-evaluate', control: { model: 'gpt-4.1', weight: 50 }, treatment: { model: 'qwen-max', weight: 50 }, enabled: false },
+              { id: 'exp_3', name: '简历优化: GPT-4.1 vs DeepSeek', agent_name: 'resume-optimize', control: { model: 'gpt-4.1', weight: 50 }, treatment: { model: 'deepseek-v3', weight: 50 }, enabled: false },
+              { id: 'exp_4', name: '面试准备: GPT-4.1 vs DeepSeek', agent_name: 'interview-prep', control: { model: 'gpt-4.1', weight: 50 }, treatment: { model: 'deepseek-v3', weight: 50 }, enabled: false },
+            ];
+
+            const experiments = experimentsData.length > 0 ? experimentsData : defaultExperiments;
+            if (experimentsData.length === 0) {
+              experimentsData = defaultExperiments;
+              saveExperiments();
+            }
+
+            const container = document.getElementById('experiments-list');
+            container.innerHTML = experiments.map(exp => \`
+              <div class="border rounded-lg p-4 mb-3 \${exp.enabled ? 'border-purple-300 bg-purple-50' : ''}">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <h4 class="font-medium text-gray-900">\${exp.name}</h4>
+                    <p class="text-sm text-gray-500 mt-1">
+                      Agent: <span class="font-mono">\${exp.agent_name}</span>
+                    </p>
+                    <div class="flex items-center gap-4 mt-2 text-sm">
+                      <span class="text-blue-600">
+                        <i class="fas fa-circle mr-1"></i>
+                        控制组: \${exp.control.model} (\${exp.control.weight}%)
+                      </span>
+                      <span class="text-purple-600">
+                        <i class="fas fa-circle mr-1"></i>
+                        实验组: \${exp.treatment.model} (\${exp.treatment.weight}%)
+                      </span>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" class="sr-only peer" \${exp.enabled ? 'checked' : ''} 
+                        onchange="toggleExperiment('\${exp.id}', this.checked)">
+                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                      <span class="ml-2 text-sm font-medium text-gray-700">\${exp.enabled ? '运行中' : '已停止'}</span>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            \`).join('');
+          }
+
+          // 切换实验状态
+          function toggleExperiment(id, enabled) {
+            const exp = experimentsData.find(e => e.id === id);
+            if (exp) {
+              // 如果启用，禁用同一 Agent 的其他实验
+              if (enabled) {
+                experimentsData.forEach(e => {
+                  if (e.agent_name === exp.agent_name && e.id !== id) {
+                    e.enabled = false;
+                  }
+                });
+              }
+              exp.enabled = enabled;
+              saveExperiments();
+              updateExperiments();
+              showToast(enabled ? '实验已启用' : '实验已停止');
+            }
+          }
+
+          // Tab 切换
+          function setupTabs() {
+            const tabs = ['overview', 'agents', 'experiments', 'logs'];
+            tabs.forEach(tab => {
+              document.getElementById('tab-' + tab).addEventListener('click', () => {
+                tabs.forEach(t => {
+                  document.getElementById('tab-' + t).classList.remove('border-blue-500', 'text-blue-600');
+                  document.getElementById('tab-' + t).classList.add('text-gray-500', 'border-transparent');
+                  document.getElementById('panel-' + t).classList.add('hidden');
+                });
+                document.getElementById('tab-' + tab).classList.remove('text-gray-500', 'border-transparent');
+                document.getElementById('tab-' + tab).classList.add('border-blue-500', 'text-blue-600');
+                document.getElementById('panel-' + tab).classList.remove('hidden');
+
+                if (tab === 'logs') updateLogs();
+                if (tab === 'experiments') updateExperiments();
+              });
+            });
+          }
+
+          // Toast 通知
+          function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-4 right-4 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
+          }
+
+          // 刷新数据
+          function refresh() {
+            loadData();
+            updateStats();
+            updateCharts();
+            updateLogs();
+            updateExperiments();
+            showToast('数据已刷新');
+          }
+
+          // 导出数据
+          function exportData() {
+            const data = JSON.stringify(metricsData, null, 2);
+            const blob = new Blob([data], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'metrics_' + new Date().toISOString().slice(0, 10) + '.json';
+            a.click();
+            URL.revokeObjectURL(url);
+            showToast('数据已导出');
+          }
+
+          // 清空数据
+          function clearData() {
+            if (confirm('确定要清空所有评测数据吗？此操作不可恢复。')) {
+              metricsData = [];
+              saveMetrics();
+              refresh();
+              showToast('数据已清空');
+            }
+          }
+
+          // 初始化
+          document.addEventListener('DOMContentLoaded', () => {
+            loadData();
+            setupTabs();
+            updateStats();
+            updateCharts();
+            updateExperiments();
+
+            document.getElementById('refresh-btn').addEventListener('click', refresh);
+            document.getElementById('export-btn').addEventListener('click', exportData);
+            document.getElementById('clear-btn').addEventListener('click', clearData);
+            document.getElementById('log-agent-filter').addEventListener('change', updateLogs);
+            document.getElementById('log-status-filter').addEventListener('change', updateLogs);
+          });
+        `
+      }} />
+    </div>,
+    { title: '评测仪表盘 - Job Copilot' }
+  )
+})
+
 // ==================== API 路由 ====================
 
 // 挂载岗位相关路由
@@ -3105,13 +3759,16 @@ app.route('/api/job', interviewRoutes)
 // 挂载简历优化相关路由
 app.route('/api/job', optimizeRoutes)
 
+// 挂载评测相关路由
+app.route('/api/metrics', metricsRoutes)
+
 // API健康检查
 app.get('/api/health', (c) => {
   return c.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '0.6.0',
-    phase: 'Phase 5 - 体验优化',
+    version: '0.7.0',
+    phase: 'Phase 6 - 模型评测与优化',
   })
 })
 
