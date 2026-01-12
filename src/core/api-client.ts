@@ -14,12 +14,14 @@ const API_CONFIG = {
 export const MODELS = {
   // 图片理解
   VISION: 'gpt-4o',
-  // 快速文本处理
-  FAST: 'qwen-mt-turbo',
+  // 快速文本处理 (使用qwen-turbo替代qwen-mt-turbo)
+  FAST: 'qwen-turbo',
   // 中等复杂度
   MEDIUM: 'qwen-max',
   // 高质量生成
   HIGH: 'gpt-4.1',
+  // DeepSeek (高性价比)
+  DEEPSEEK: 'deepseek-v3',
 } as const;
 
 // 模型别名（用于Agent选择）
