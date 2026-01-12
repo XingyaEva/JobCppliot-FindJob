@@ -24,82 +24,194 @@ app.use(renderer)
 // 首页
 app.get('/', (c) => {
   return c.render(
-    <div class="min-h-screen bg-white">
-      {/* 导航栏 */}
-      <header class="border-b border-gray-100">
-        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <h1 class="text-xl font-bold">Job Copilot</h1>
-          <div class="flex items-center gap-4">
-            <span id="resume-status" class="text-sm text-gray-500">
-              <i class="fas fa-file-alt mr-1"></i>
-              简历状态: 未上传
-            </span>
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 统一导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/" class="flex items-center gap-2 font-bold text-lg">
+              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
+                <i class="fas fa-robot"></i>
+              </span>
+              <span class="hidden sm:inline">Job Copilot</span>
+            </a>
+            <nav class="flex items-center gap-1">
+              <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-900">
+                <i class="fas fa-home mr-1.5"></i><span class="hidden sm:inline">首页</span>
+              </a>
+              <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
+              </a>
+              <a href="/resume" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-file-alt mr-1.5"></i><span class="hidden sm:inline">我的简历</span>
+              </a>
+            </nav>
+            <div class="flex items-center gap-2">
+              <span id="resume-status-nav" class="hidden sm:flex text-xs text-gray-500 items-center">
+                <i class="fas fa-user-circle mr-1"></i>未上传简历
+              </span>
+              <a href="/job/new" class="px-3 py-1.5 bg-black text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+                <i class="fas fa-plus mr-1"></i><span class="hidden sm:inline">新建</span>
+              </a>
+            </div>
           </div>
         </div>
       </header>
 
       {/* 主内容区 */}
-      <main class="max-w-6xl mx-auto px-4 py-8">
+      <main class="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
+        {/* 使用指南 */}
+        <div id="guide-section" class="mb-8">
+          <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6">
+            <h2 class="text-lg font-semibold mb-4">
+              <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+              使用流程
+            </h2>
+            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-2">
+              <div class="flex items-center gap-2">
+                <div id="step-1" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">1</div>
+                <span class="text-sm text-gray-600">解析岗位</span>
+              </div>
+              <div class="hidden sm:block w-8 h-0.5 bg-gray-200"></div>
+              <div class="flex items-center gap-2">
+                <div id="step-2" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">2</div>
+                <span class="text-sm text-gray-600">上传简历</span>
+              </div>
+              <div class="hidden sm:block w-8 h-0.5 bg-gray-200"></div>
+              <div class="flex items-center gap-2">
+                <div id="step-3" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">3</div>
+                <span class="text-sm text-gray-600">匹配评估</span>
+              </div>
+              <div class="hidden sm:block w-8 h-0.5 bg-gray-200"></div>
+              <div class="flex items-center gap-2">
+                <div id="step-4" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">4</div>
+                <span class="text-sm text-gray-600">面试准备</span>
+              </div>
+              <div class="hidden sm:block w-8 h-0.5 bg-gray-200"></div>
+              <div class="flex items-center gap-2">
+                <div id="step-5" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">5</div>
+                <span class="text-sm text-gray-600">优化简历</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
         {/* 快速入口 */}
-        <div class="mb-12">
+        <div class="mb-8">
           <a 
             href="/job/new" 
-            class="block w-full max-w-xl mx-auto p-8 border-2 border-dashed border-gray-200 rounded-xl text-center hover:border-gray-400 hover:bg-gray-50 transition-all card-hover"
+            class="block w-full max-w-xl mx-auto p-8 border-2 border-dashed border-gray-200 rounded-xl text-center hover:border-blue-400 hover:bg-blue-50 transition-all card-hover"
           >
-            <i class="fas fa-plus text-4xl text-gray-400 mb-4"></i>
-            <h2 class="text-xl font-semibold mb-2">+ 新建岗位解析</h2>
+            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <i class="fas fa-plus text-2xl text-blue-500"></i>
+            </div>
+            <h2 class="text-xl font-semibold mb-2">新建岗位解析</h2>
             <p class="text-gray-500">上传 JD 截图 或 粘贴岗位描述</p>
           </a>
         </div>
 
         {/* 最近解析的岗位 */}
         <div>
-          <div class="flex items-center justify-between mb-6">
+          <div class="flex items-center justify-between mb-4">
             <h2 class="text-lg font-semibold">最近解析的岗位</h2>
-            <a href="/jobs" class="text-sm text-gray-500 hover:text-gray-700">
+            <a href="/jobs" class="text-sm text-blue-500 hover:text-blue-600">
               查看全部 <i class="fas fa-arrow-right ml-1"></i>
             </a>
           </div>
 
           <div id="recent-jobs" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* 岗位卡片将通过JS动态加载 */}
-            <div class="p-8 bg-gray-50 rounded-xl text-center text-gray-400">
-              <i class="fas fa-inbox text-3xl mb-3"></i>
-              <p>暂无解析记录</p>
-              <p class="text-sm mt-1">点击上方按钮开始解析岗位</p>
+            {/* 骨架屏 */}
+            <div class="p-4 border border-gray-200 rounded-xl">
+              <div class="skeleton h-5 w-3/4 mb-3"></div>
+              <div class="skeleton h-4 w-1/2 mb-4"></div>
+              <div class="flex gap-2">
+                <div class="skeleton h-6 w-16 rounded-full"></div>
+                <div class="skeleton h-6 w-20 rounded-full"></div>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* 功能入口 */}
-        <div class="mt-12 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <a href="/jobs" class="p-4 bg-gray-50 rounded-xl text-center hover:bg-gray-100 transition-colors">
-            <i class="fas fa-briefcase text-2xl text-gray-600 mb-2"></i>
-            <p class="text-sm font-medium">岗位库</p>
-          </a>
-          <a href="/resume" class="p-4 bg-gray-50 rounded-xl text-center hover:bg-gray-100 transition-colors">
-            <i class="fas fa-file-alt text-2xl text-gray-600 mb-2"></i>
-            <p class="text-sm font-medium">我的简历</p>
-          </a>
-          <a href="#" class="p-4 bg-gray-50 rounded-xl text-center hover:bg-gray-100 transition-colors opacity-50">
-            <i class="fas fa-chart-bar text-2xl text-gray-600 mb-2"></i>
-            <p class="text-sm font-medium">数据统计</p>
-            <span class="text-xs text-gray-400">即将推出</span>
-          </a>
-          <a href="#" class="p-4 bg-gray-50 rounded-xl text-center hover:bg-gray-100 transition-colors opacity-50">
-            <i class="fas fa-cog text-2xl text-gray-600 mb-2"></i>
-            <p class="text-sm font-medium">设置</p>
-            <span class="text-xs text-gray-400">即将推出</span>
-          </a>
         </div>
       </main>
 
       {/* 页脚 */}
-      <footer class="border-t border-gray-100 mt-12">
-        <div class="max-w-6xl mx-auto px-4 py-6 text-center text-sm text-gray-400">
-          <p>Job Copilot - 智能求职助手 | Phase 1 - JD解析</p>
+      <footer class="border-t border-gray-100 mt-auto">
+        <div class="max-w-6xl mx-auto px-4 py-6">
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-400">
+            <div class="flex items-center gap-4">
+              <span>Job Copilot v0.6.0</span>
+              <span class="hidden sm:inline">|</span>
+              <span class="hidden sm:inline">Phase 5 - 体验优化</span>
+            </div>
+            <div class="flex items-center gap-4">
+              <button onclick="JobCopilot.exportData()" class="hover:text-gray-600 transition-colors">
+                <i class="fas fa-download mr-1"></i>导出数据
+              </button>
+              <button onclick="JobCopilot.clearData()" class="hover:text-red-500 transition-colors">
+                <i class="fas fa-trash-alt mr-1"></i>清空数据
+              </button>
+            </div>
+          </div>
         </div>
       </footer>
+
+      {/* 页面脚本 */}
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            // 加载最近岗位
+            var jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+            var recentJobs = document.getElementById('recent-jobs');
+            var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+            
+            // 更新简历状态
+            var resumeNav = document.getElementById('resume-status-nav');
+            if (resumeNav && resumes.length > 0) {
+              resumeNav.innerHTML = '<i class="fas fa-check-circle text-green-500 mr-1"></i>' + 
+                (resumes[0].basic_info?.name || '已上传');
+            }
+            
+            // 更新步骤指引
+            if (jobs.length > 0) {
+              document.getElementById('step-1').className = 'w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-medium';
+              document.getElementById('step-1').innerHTML = '<i class="fas fa-check"></i>';
+            }
+            if (resumes.length > 0) {
+              document.getElementById('step-2').className = 'w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-medium';
+              document.getElementById('step-2').innerHTML = '<i class="fas fa-check"></i>';
+            }
+            
+            // 渲染岗位列表
+            if (jobs.length === 0) {
+              recentJobs.innerHTML = '<div class="col-span-full p-8 bg-gray-50 rounded-xl text-center text-gray-400">' +
+                '<i class="fas fa-inbox text-3xl mb-3"></i>' +
+                '<p>暂无解析记录</p>' +
+                '<p class="text-sm mt-1">点击上方按钮开始解析岗位</p>' +
+                '</div>';
+              return;
+            }
+            
+            recentJobs.innerHTML = jobs.slice(0, 6).map(function(job) {
+              var statusColor = job.status === 'completed' ? 'green' : (job.status === 'error' ? 'red' : 'yellow');
+              return '<div class="p-4 border border-gray-200 rounded-xl hover:shadow-md transition-shadow card-hover">' +
+                '<div class="flex items-start justify-between mb-2">' +
+                '<a href="/job/' + job.id + '" class="font-semibold text-gray-900 hover:text-blue-600">' + job.title + '</a>' +
+                '<button onclick="event.stopPropagation();JobCopilot.deleteJob(\\'' + job.id + '\\')" class="text-gray-400 hover:text-red-500 p-1" title="删除">' +
+                '<i class="fas fa-trash-alt text-xs"></i></button>' +
+                '</div>' +
+                '<p class="text-sm text-gray-500 mb-3">' + job.company + '</p>' +
+                '<div class="flex flex-wrap gap-2 mb-3">' +
+                (job.a_analysis?.A2_product_type?.type ? '<span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">' + job.a_analysis.A2_product_type.type + '</span>' : '') +
+                (job.a_analysis?.A3_business_domain?.primary ? '<span class="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded-full">' + job.a_analysis.A3_business_domain.primary + '</span>' : '') +
+                '</div>' +
+                '<div class="flex items-center justify-between text-xs text-gray-400">' +
+                '<span>' + new Date(job.created_at).toLocaleDateString() + '</span>' +
+                '<a href="/job/' + job.id + '/match" class="text-blue-500 hover:text-blue-600">匹配分析 →</a>' +
+                '</div>' +
+                '</div>';
+            }).join('');
+          });
+        `
+      }} />
     </div>,
     { title: 'Job Copilot - 智能求职助手' }
   )
@@ -651,63 +763,133 @@ app.get('/job/:id', (c) => {
 // 岗位库页面
 app.get('/jobs', (c) => {
   return c.render(
-    <div class="min-h-screen bg-white">
-      <header class="border-b border-gray-100">
-        <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div class="flex items-center">
-            <a href="/" class="text-gray-500 hover:text-gray-700 mr-4">
-              <i class="fas fa-arrow-left"></i>
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 统一导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/" class="flex items-center gap-2 font-bold text-lg">
+              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
+                <i class="fas fa-robot"></i>
+              </span>
+              <span class="hidden sm:inline">Job Copilot</span>
             </a>
-            <h1 class="text-xl font-bold">岗位库</h1>
+            <nav class="flex items-center gap-1">
+              <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-home mr-1.5"></i><span class="hidden sm:inline">首页</span>
+              </a>
+              <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-900">
+                <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
+              </a>
+              <a href="/resume" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-file-alt mr-1.5"></i><span class="hidden sm:inline">我的简历</span>
+              </a>
+            </nav>
+            <a href="/job/new" class="px-3 py-1.5 bg-black text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+              <i class="fas fa-plus mr-1"></i><span class="hidden sm:inline">新建</span>
+            </a>
+          </div>
+        </div>
+      </header>
+      
+      <main class="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
+        {/* 面包屑 */}
+        <nav class="flex items-center gap-2 text-sm text-gray-500 mb-6">
+          <a href="/" class="hover:text-gray-700"><i class="fas fa-home"></i></a>
+          <i class="fas fa-chevron-right text-xs text-gray-300"></i>
+          <span class="text-gray-900 font-medium">岗位库</span>
+        </nav>
+
+        {/* 标题和统计 */}
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-2xl font-bold">岗位库</h1>
+            <p id="jobs-count" class="text-sm text-gray-500 mt-1">共 0 个岗位</p>
           </div>
           <a href="/job/new" class="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800">
             <i class="fas fa-plus mr-1"></i>新建解析
           </a>
         </div>
-      </header>
-      
-      <main class="max-w-6xl mx-auto px-4 py-8">
+
+        {/* 岗位列表 */}
         <div id="jobs-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {/* 岗位列表将通过JS动态渲染 */}
+          {/* 骨架屏 */}
+          <div class="p-4 border border-gray-200 rounded-xl">
+            <div class="skeleton h-5 w-3/4 mb-3"></div>
+            <div class="skeleton h-4 w-1/2 mb-4"></div>
+            <div class="flex gap-2">
+              <div class="skeleton h-6 w-16 rounded-full"></div>
+              <div class="skeleton h-6 w-20 rounded-full"></div>
+            </div>
+          </div>
         </div>
         
         <div id="empty-state" class="hidden text-center py-12">
-          <i class="fas fa-inbox text-4xl text-gray-300 mb-4"></i>
-          <p class="text-gray-500">暂无岗位记录</p>
-          <a href="/job/new" class="inline-block mt-4 px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800">
-            开始解析第一个岗位
+          <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-inbox text-2xl text-gray-400"></i>
+          </div>
+          <h3 class="text-lg font-medium text-gray-900 mb-2">暂无岗位记录</h3>
+          <p class="text-gray-500 mb-4">开始解析你的第一个目标岗位</p>
+          <a href="/job/new" class="inline-flex items-center px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800">
+            <i class="fas fa-plus mr-2"></i>新建岗位解析
           </a>
         </div>
       </main>
 
+      {/* 页脚 */}
+      <footer class="border-t border-gray-100 mt-auto">
+        <div class="max-w-6xl mx-auto px-4 py-6">
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-400">
+            <span>Job Copilot v0.6.0</span>
+            <div class="flex items-center gap-4">
+              <button onclick="JobCopilot.exportData()" class="hover:text-gray-600 transition-colors">
+                <i class="fas fa-download mr-1"></i>导出数据
+              </button>
+            </div>
+          </div>
+        </div>
+      </footer>
+
       <script dangerouslySetInnerHTML={{
         __html: `
           document.addEventListener('DOMContentLoaded', function() {
-            const jobsList = document.getElementById('jobs-list');
-            const emptyState = document.getElementById('empty-state');
+            var jobsList = document.getElementById('jobs-list');
+            var emptyState = document.getElementById('empty-state');
+            var jobsCount = document.getElementById('jobs-count');
             
-            // 从localStorage获取岗位数据
-            const jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+            var jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+            
+            jobsCount.textContent = '共 ' + jobs.length + ' 个岗位';
             
             if (jobs.length === 0) {
+              jobsList.innerHTML = '';
               emptyState.classList.remove('hidden');
               return;
             }
             
-            jobsList.innerHTML = jobs.map(job => {
-              const statusColor = job.status === 'completed' ? 'green' : (job.status === 'error' ? 'red' : 'yellow');
-              return '<a href="/job/' + job.id + '" class="block p-4 border border-gray-200 rounded-xl hover:shadow-md transition-shadow">' +
+            jobsList.innerHTML = jobs.map(function(job) {
+              var statusColor = job.status === 'completed' ? 'green' : (job.status === 'error' ? 'red' : 'yellow');
+              return '<div class="p-4 border border-gray-200 rounded-xl hover:shadow-md transition-shadow card-hover">' +
                 '<div class="flex items-start justify-between mb-2">' +
-                '<h3 class="font-semibold text-gray-900">' + job.title + '</h3>' +
-                '<span class="w-2 h-2 rounded-full bg-' + statusColor + '-500"></span>' +
+                '<a href="/job/' + job.id + '" class="font-semibold text-gray-900 hover:text-blue-600 flex-1">' + job.title + '</a>' +
+                '<div class="flex items-center gap-2 ml-2">' +
+                '<span class="w-2 h-2 rounded-full bg-' + statusColor + '-500" title="' + job.status + '"></span>' +
+                '<button onclick="event.stopPropagation();JobCopilot.deleteJob(\\'' + job.id + '\\')" class="text-gray-400 hover:text-red-500 p-1" title="删除">' +
+                '<i class="fas fa-trash-alt text-xs"></i></button>' +
+                '</div></div>' +
+                '<p class="text-sm text-gray-500 mb-3"><i class="fas fa-building mr-1"></i>' + job.company + '</p>' +
+                '<div class="flex flex-wrap gap-2 mb-3">' +
+                (job.a_analysis?.A2_product_type?.type ? '<span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">' + job.a_analysis.A2_product_type.type + '</span>' : '') +
+                (job.a_analysis?.A3_business_domain?.primary ? '<span class="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded-full">' + job.a_analysis.A3_business_domain.primary + '</span>' : '') +
                 '</div>' +
-                '<p class="text-sm text-gray-500 mb-3">' + job.company + '</p>' +
-                '<div class="flex flex-wrap gap-2">' +
-                (job.a_analysis?.A2_product_type?.type ? '<span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded">' + job.a_analysis.A2_product_type.type + '</span>' : '') +
-                (job.a_analysis?.A3_business_domain?.primary ? '<span class="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded">' + job.a_analysis.A3_business_domain.primary + '</span>' : '') +
-                '</div>' +
-                '<p class="text-xs text-gray-400 mt-3">' + new Date(job.created_at).toLocaleDateString() + '</p>' +
-                '</a>';
+                '<div class="flex items-center justify-between text-xs">' +
+                '<span class="text-gray-400">' + new Date(job.created_at).toLocaleDateString() + '</span>' +
+                '<div class="flex gap-2">' +
+                '<a href="/job/' + job.id + '/match" class="text-blue-500 hover:text-blue-600">匹配</a>' +
+                '<a href="/job/' + job.id + '/interview" class="text-purple-500 hover:text-purple-600">面试</a>' +
+                '<a href="/job/' + job.id + '/optimize" class="text-green-500 hover:text-green-600">优化</a>' +
+                '</div></div>' +
+                '</div>';
             }).join('');
           });
         `
@@ -720,17 +902,43 @@ app.get('/jobs', (c) => {
 // 简历页面
 app.get('/resume', (c) => {
   return c.render(
-    <div class="min-h-screen bg-white">
-      <header class="border-b border-gray-100">
-        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center">
-          <a href="/" class="text-gray-500 hover:text-gray-700 mr-4">
-            <i class="fas fa-arrow-left"></i>
-          </a>
-          <h1 class="text-xl font-bold">我的简历</h1>
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 统一导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/" class="flex items-center gap-2 font-bold text-lg">
+              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
+                <i class="fas fa-robot"></i>
+              </span>
+              <span class="hidden sm:inline">Job Copilot</span>
+            </a>
+            <nav class="flex items-center gap-1">
+              <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-home mr-1.5"></i><span class="hidden sm:inline">首页</span>
+              </a>
+              <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
+              </a>
+              <a href="/resume" class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-900">
+                <i class="fas fa-file-alt mr-1.5"></i><span class="hidden sm:inline">我的简历</span>
+              </a>
+            </nav>
+            <a href="/job/new" class="px-3 py-1.5 bg-black text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+              <i class="fas fa-plus mr-1"></i><span class="hidden sm:inline">新建</span>
+            </a>
+          </div>
         </div>
       </header>
       
-      <main class="max-w-4xl mx-auto px-4 py-8">
+      <main class="flex-1 max-w-4xl mx-auto px-4 py-8 w-full">
+        {/* 面包屑 */}
+        <nav class="flex items-center gap-2 text-sm text-gray-500 mb-6">
+          <a href="/" class="hover:text-gray-700"><i class="fas fa-home"></i></a>
+          <i class="fas fa-chevron-right text-xs text-gray-300"></i>
+          <span class="text-gray-900 font-medium">我的简历</span>
+        </nav>
+
         {/* 当前简历 */}
         <div id="current-resume" class="hidden mb-8">
           <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6">
@@ -743,9 +951,14 @@ app.get('/resume', (c) => {
                   <span>目标岗位</span>
                 </p>
               </div>
-              <span class="px-3 py-1 bg-green-100 text-green-600 text-sm rounded-full">
-                <i class="fas fa-check mr-1"></i>已解析
-              </span>
+              <div class="flex items-center gap-2">
+                <span class="px-3 py-1 bg-green-100 text-green-600 text-sm rounded-full">
+                  <i class="fas fa-check mr-1"></i>已解析
+                </span>
+                <button id="delete-resume-btn" class="p-2 text-gray-400 hover:text-red-500" title="删除简历">
+                  <i class="fas fa-trash-alt"></i>
+                </button>
+              </div>
             </div>
             
             {/* 能力标签 */}
@@ -768,13 +981,16 @@ app.get('/resume', (c) => {
               </div>
             </div>
             
-            <div class="flex gap-3 mt-4">
+            <div class="flex flex-wrap gap-3 mt-4">
               <button id="view-detail-btn" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">
                 <i class="fas fa-eye mr-1"></i>查看详情
               </button>
               <button id="re-upload-btn" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">
                 <i class="fas fa-redo mr-1"></i>重新上传
               </button>
+              <a href="/jobs" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">
+                <i class="fas fa-search mr-1"></i>去匹配岗位
+              </a>
             </div>
           </div>
         </div>
@@ -908,6 +1124,17 @@ app.get('/resume', (c) => {
                 const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
                 if (resumes.length > 0) {
                   alert('简历详情页开发中...\\n\\n能力标签：\\n- 行业: ' + (resumes[0].ability_tags?.industry?.join(', ') || '无') + '\\n- 技术: ' + (resumes[0].ability_tags?.technology?.join(', ') || '无') + '\\n- 产品: ' + (resumes[0].ability_tags?.product?.join(', ') || '无') + '\\n- 能力: ' + (resumes[0].ability_tags?.capability?.join(', ') || '无'));
+                }
+              });
+            }
+
+            // 删除简历
+            var deleteResumeBtn = document.getElementById('delete-resume-btn');
+            if (deleteResumeBtn) {
+              deleteResumeBtn.addEventListener('click', function() {
+                var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+                if (resumes.length > 0) {
+                  JobCopilot.deleteResume(resumes[0].id);
                 }
               });
             }
@@ -2883,8 +3110,8 @@ app.get('/api/health', (c) => {
   return c.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '0.5.0',
-    phase: 'Phase 4 - 简历优化',
+    version: '0.6.0',
+    phase: 'Phase 5 - 体验优化',
   })
 })
 

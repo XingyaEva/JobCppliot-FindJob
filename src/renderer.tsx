@@ -32,13 +32,187 @@ export const renderer = jsxRenderer(({ children, title }) => {
         }} />
         {/* FontAwesome 图标 */}
         <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css" rel="stylesheet" />
-        {/* 自定义样式 */}
-        <link href="/static/style.css" rel="stylesheet" />
+        {/* 全局样式 */}
+        <style dangerouslySetInnerHTML={{
+          __html: `
+            /* 动画 */
+            @keyframes slide-up {
+              from { opacity: 0; transform: translateY(20px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+            .animate-slide-up {
+              animation: slide-up 0.3s ease-out;
+            }
+
+            /* 骨架屏 */
+            @keyframes shimmer {
+              0% { background-position: -200% 0; }
+              100% { background-position: 200% 0; }
+            }
+            .skeleton {
+              background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+              background-size: 200% 100%;
+              animation: shimmer 1.5s infinite;
+              border-radius: 4px;
+            }
+
+            /* 加载旋转 */
+            .loading-spinner {
+              animation: spin 1s linear infinite;
+            }
+            @keyframes spin {
+              from { transform: rotate(0deg); }
+              to { transform: rotate(360deg); }
+            }
+
+            /* 卡片悬停效果 */
+            .card-hover {
+              transition: all 0.2s ease;
+            }
+            .card-hover:hover {
+              transform: translateY(-2px);
+              box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            }
+
+            /* 滚动条优化 */
+            ::-webkit-scrollbar {
+              width: 6px;
+              height: 6px;
+            }
+            ::-webkit-scrollbar-track {
+              background: #f1f1f1;
+            }
+            ::-webkit-scrollbar-thumb {
+              background: #c1c1c1;
+              border-radius: 3px;
+            }
+            ::-webkit-scrollbar-thumb:hover {
+              background: #a1a1a1;
+            }
+
+            /* 响应式优化 */
+            @media (max-width: 640px) {
+              .mobile-full {
+                width: 100% !important;
+                margin-left: 0 !important;
+                margin-right: 0 !important;
+              }
+            }
+          `
+        }} />
       </head>
-      <body class="bg-white text-gray-900 antialiased">
+      <body class="bg-white text-gray-900 antialiased min-h-screen flex flex-col">
         {children}
-        {/* 前端JS */}
-        <script src="/static/app.js"></script>
+        {/* 全局脚本 */}
+        <script dangerouslySetInnerHTML={{
+          __html: `
+            // 全局命名空间
+            window.JobCopilot = window.JobCopilot || {};
+
+            // Toast 通知
+            window.JobCopilot.showToast = function(message, type) {
+              type = type || 'success';
+              var toast = document.createElement('div');
+              var bgColor = type === 'success' ? 'bg-green-600' : 
+                            type === 'error' ? 'bg-red-600' : 
+                            type === 'warning' ? 'bg-yellow-600' : 'bg-gray-800';
+              toast.className = 'fixed bottom-4 right-4 ' + bgColor + ' text-white px-4 py-3 rounded-lg shadow-lg z-50 flex items-center gap-2 animate-slide-up';
+              var icon = type === 'success' ? 'fa-check-circle' : 
+                         type === 'error' ? 'fa-times-circle' : 
+                         type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+              toast.innerHTML = '<i class="fas ' + icon + '"></i><span>' + message + '</span>';
+              document.body.appendChild(toast);
+              setTimeout(function() {
+                toast.style.opacity = '0';
+                toast.style.transform = 'translateY(20px)';
+                toast.style.transition = 'all 0.3s';
+                setTimeout(function() { toast.remove(); }, 300);
+              }, 3000);
+            };
+
+            // 导出数据
+            window.JobCopilot.exportData = function() {
+              var data = {
+                jobs: JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]'),
+                resumes: JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]'),
+                matches: JSON.parse(localStorage.getItem('jobcopilot_matches') || '[]'),
+                interviews: JSON.parse(localStorage.getItem('jobcopilot_interviews') || '[]'),
+                optimizations: JSON.parse(localStorage.getItem('jobcopilot_optimizations') || '[]'),
+                exportedAt: new Date().toISOString(),
+                version: '0.6.0'
+              };
+              
+              var blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url;
+              a.download = 'jobcopilot_data_' + new Date().toISOString().split('T')[0] + '.json';
+              document.body.appendChild(a);
+              a.click();
+              document.body.removeChild(a);
+              URL.revokeObjectURL(url);
+              
+              JobCopilot.showToast('数据已导出');
+            };
+
+            // 清空数据
+            window.JobCopilot.clearData = function() {
+              if (!confirm('确定要清空所有数据吗？此操作不可撤销。')) return;
+              
+              localStorage.removeItem('jobcopilot_jobs');
+              localStorage.removeItem('jobcopilot_resumes');
+              localStorage.removeItem('jobcopilot_matches');
+              localStorage.removeItem('jobcopilot_interviews');
+              localStorage.removeItem('jobcopilot_optimizations');
+              
+              JobCopilot.showToast('数据已清空');
+              setTimeout(function() { location.href = '/'; }, 500);
+            };
+
+            // 删除单条岗位
+            window.JobCopilot.deleteJob = function(jobId) {
+              if (!confirm('确定要删除这个岗位吗？相关的匹配结果和面试准备也会被删除。')) return;
+              
+              var jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+              var filtered = jobs.filter(function(j) { return j.id !== jobId; });
+              localStorage.setItem('jobcopilot_jobs', JSON.stringify(filtered));
+              
+              // 同时删除关联数据
+              var matches = JSON.parse(localStorage.getItem('jobcopilot_matches') || '[]');
+              localStorage.setItem('jobcopilot_matches', JSON.stringify(matches.filter(function(m) { return m.job_id !== jobId; })));
+              
+              var interviews = JSON.parse(localStorage.getItem('jobcopilot_interviews') || '[]');
+              localStorage.setItem('jobcopilot_interviews', JSON.stringify(interviews.filter(function(i) { return i.job_id !== jobId; })));
+              
+              var optimizations = JSON.parse(localStorage.getItem('jobcopilot_optimizations') || '[]');
+              localStorage.setItem('jobcopilot_optimizations', JSON.stringify(optimizations.filter(function(o) { return o.job_id !== jobId; })));
+              
+              JobCopilot.showToast('岗位已删除');
+              location.reload();
+            };
+
+            // 删除简历
+            window.JobCopilot.deleteResume = function(resumeId) {
+              if (!confirm('确定要删除这份简历吗？')) return;
+              
+              var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+              var filtered = resumes.filter(function(r) { return r.id !== resumeId; });
+              localStorage.setItem('jobcopilot_resumes', JSON.stringify(filtered));
+              
+              JobCopilot.showToast('简历已删除');
+              location.reload();
+            };
+
+            // 获取简历状态
+            window.JobCopilot.getResumeStatus = function() {
+              var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+              return {
+                hasResume: resumes.length > 0,
+                resumeName: resumes[0] && resumes[0].basic_info ? resumes[0].basic_info.name : '未上传'
+              };
+            };
+          `
+        }} />
       </body>
     </html>
   )
