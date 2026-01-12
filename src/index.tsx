@@ -9,6 +9,7 @@ import { renderer } from './renderer'
 import { chat, MODELS } from './core/api-client'
 import jobRoutes from './routes/job'
 import resumeRoutes, { matchRoutes } from './routes/resume'
+import interviewRoutes from './routes/interview'
 
 // 创建应用实例
 const app = new Hono()
@@ -1138,8 +1139,8 @@ app.get('/job/:id/match', (c) => {
 
           {/* 操作按钮 */}
           <div class="flex flex-wrap gap-4 pt-4">
-            <a href="#" class="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 opacity-50 cursor-not-allowed">
-              <i class="fas fa-microphone mr-2"></i>生成面试准备 (Phase 3)
+            <a href={`/job/${jobId}/interview`} id="interview-btn" class="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800">
+              <i class="fas fa-microphone mr-2"></i>生成面试准备
             </a>
             <a href="#" class="px-6 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 opacity-50 cursor-not-allowed">
               <i class="fas fa-edit mr-2"></i>优化简历 (Phase 4)
@@ -1298,6 +1299,537 @@ app.get('/job/:id/match', (c) => {
   )
 })
 
+// 面试准备页
+app.get('/job/:id/interview', (c) => {
+  const jobId = c.req.param('id');
+  
+  return c.render(
+    <div class="min-h-screen bg-white">
+      <header class="border-b border-gray-100">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div class="flex items-center">
+            <a href={`/job/${jobId}/match`} class="text-gray-500 hover:text-gray-700 mr-4">
+              <i class="fas fa-arrow-left"></i>
+            </a>
+            <h1 id="page-title" class="text-xl font-bold">面试准备</h1>
+          </div>
+          <span id="status-badge" class="hidden px-3 py-1 bg-green-100 text-green-600 text-sm rounded-full">
+            <i class="fas fa-check mr-1"></i>已生成
+          </span>
+        </div>
+      </header>
+      
+      <main class="max-w-4xl mx-auto px-4 py-8">
+        {/* 加载状态 */}
+        <div id="loading" class="text-center py-12">
+          <i class="fas fa-spinner loading-spinner text-3xl text-gray-400 mb-4"></i>
+          <p class="text-gray-500">正在生成面试准备材料...</p>
+          <p class="text-sm text-gray-400 mt-2">预计需要 30-60 秒</p>
+          <div id="progress-steps" class="mt-6 text-left max-w-xs mx-auto space-y-2">
+            <div id="step-company" class="flex items-center gap-2 text-sm text-gray-500">
+              <i class="fas fa-circle text-gray-300"></i>
+              <span>公司分析</span>
+            </div>
+            <div id="step-interview" class="flex items-center gap-2 text-sm text-gray-500">
+              <i class="fas fa-circle text-gray-300"></i>
+              <span>面试准备</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 内容区域 */}
+        <div id="content" class="hidden space-y-6">
+          {/* 公司分析卡片 */}
+          <div id="company-card" class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6">
+            <div class="flex items-start justify-between mb-4">
+              <div>
+                <h2 class="text-lg font-semibold flex items-center gap-2">
+                  <i class="fas fa-building text-blue-500"></i>
+                  <span id="company-name">公司名称</span>
+                </h2>
+                <p id="company-info" class="text-sm text-gray-500 mt-1">行业 | 阶段 | 规模</p>
+              </div>
+              <button onclick="JobCopilot.copySection('company')" class="text-gray-400 hover:text-gray-600" title="复制">
+                <i class="fas fa-copy"></i>
+              </button>
+            </div>
+            <div class="space-y-3 text-sm">
+              <div>
+                <span class="text-gray-500">AI应用场景：</span>
+                <span id="ai-scenarios" class="text-gray-700">-</span>
+              </div>
+              <div>
+                <span class="text-gray-500">岗位AI重点：</span>
+                <span id="ai-focus" class="text-gray-700">-</span>
+              </div>
+              <div>
+                <span class="text-gray-500">竞品对标：</span>
+                <span id="competitors" class="text-gray-700">-</span>
+              </div>
+              <div>
+                <span class="text-gray-500">面试洞察：</span>
+                <span id="interview-tips" class="text-gray-700">-</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Tab 切换 */}
+          <div class="border-b border-gray-200">
+            <nav class="flex gap-6" id="tabs">
+              <button data-tab="intro" class="tab-btn pb-3 text-sm font-medium border-b-2 border-black text-black">
+                自我介绍
+              </button>
+              <button data-tab="projects" class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                项目推荐
+              </button>
+              <button data-tab="questions" class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                面试题目
+              </button>
+              <button data-tab="strategy" class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">
+                面试策略
+              </button>
+            </nav>
+          </div>
+
+          {/* Tab 内容 */}
+          <div id="tab-content">
+            {/* 自我介绍 Tab */}
+            <div id="tab-intro" class="tab-panel space-y-6">
+              <div class="bg-gray-50 rounded-xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="font-semibold">
+                    <i class="fas fa-clock text-blue-500 mr-2"></i>1分钟版本
+                  </h3>
+                  <button onclick="JobCopilot.copySection('intro-1min')" class="text-gray-400 hover:text-gray-600 text-sm">
+                    <i class="fas fa-copy mr-1"></i>复制
+                  </button>
+                </div>
+                <p id="intro-1min" class="text-gray-700 leading-relaxed whitespace-pre-wrap">-</p>
+              </div>
+              <div class="bg-gray-50 rounded-xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                  <h3 class="font-semibold">
+                    <i class="fas fa-clock text-purple-500 mr-2"></i>2分钟版本
+                  </h3>
+                  <button onclick="JobCopilot.copySection('intro-2min')" class="text-gray-400 hover:text-gray-600 text-sm">
+                    <i class="fas fa-copy mr-1"></i>复制
+                  </button>
+                </div>
+                <p id="intro-2min" class="text-gray-700 leading-relaxed whitespace-pre-wrap">-</p>
+              </div>
+              <div class="bg-yellow-50 rounded-xl p-4">
+                <h4 class="font-medium text-yellow-700 mb-2">
+                  <i class="fas fa-lightbulb mr-2"></i>表达建议
+                </h4>
+                <ul id="delivery-tips" class="text-sm text-yellow-800 space-y-1"></ul>
+              </div>
+            </div>
+
+            {/* 项目推荐 Tab */}
+            <div id="tab-projects" class="tab-panel hidden space-y-4">
+              <div id="projects-list"></div>
+            </div>
+
+            {/* 面试题目 Tab */}
+            <div id="tab-questions" class="tab-panel hidden space-y-6">
+              {/* 关于你 */}
+              <div>
+                <h3 class="font-semibold mb-3 flex items-center">
+                  <span class="w-6 h-6 bg-blue-100 text-blue-600 rounded flex items-center justify-center mr-2 text-xs">你</span>
+                  关于你
+                </h3>
+                <div id="questions-you" class="space-y-3"></div>
+              </div>
+              {/* 关于公司 */}
+              <div>
+                <h3 class="font-semibold mb-3 flex items-center">
+                  <span class="w-6 h-6 bg-green-100 text-green-600 rounded flex items-center justify-center mr-2 text-xs">他</span>
+                  关于公司/岗位
+                </h3>
+                <div id="questions-company" class="space-y-3"></div>
+              </div>
+              {/* 关于未来 */}
+              <div>
+                <h3 class="font-semibold mb-3 flex items-center">
+                  <span class="w-6 h-6 bg-purple-100 text-purple-600 rounded flex items-center justify-center mr-2 text-xs">未</span>
+                  关于未来
+                </h3>
+                <div id="questions-future" class="space-y-3"></div>
+              </div>
+            </div>
+
+            {/* 面试策略 Tab */}
+            <div id="tab-strategy" class="tab-panel hidden space-y-6">
+              <div class="bg-gradient-to-r from-green-50 to-teal-50 rounded-xl p-6">
+                <h3 class="font-semibold mb-3">
+                  <i class="fas fa-bullseye text-green-500 mr-2"></i>目标印象
+                </h3>
+                <p id="impression-goal" class="text-gray-700">-</p>
+              </div>
+              <div class="bg-blue-50 rounded-xl p-6">
+                <h3 class="font-semibold mb-3">
+                  <i class="fas fa-key text-blue-500 mr-2"></i>核心信息
+                </h3>
+                <ul id="key-messages" class="space-y-2 text-gray-700"></ul>
+              </div>
+              <div class="bg-red-50 rounded-xl p-6">
+                <h3 class="font-semibold mb-3">
+                  <i class="fas fa-ban text-red-500 mr-2"></i>避免话题
+                </h3>
+                <ul id="avoid-topics" class="space-y-2 text-gray-700"></ul>
+              </div>
+              <div class="bg-purple-50 rounded-xl p-6">
+                <div class="flex items-center justify-between mb-3">
+                  <h3 class="font-semibold">
+                    <i class="fas fa-question-circle text-purple-500 mr-2"></i>反问面试官
+                  </h3>
+                  <button onclick="JobCopilot.copySection('closing-questions')" class="text-gray-400 hover:text-gray-600 text-sm">
+                    <i class="fas fa-copy mr-1"></i>复制
+                  </button>
+                </div>
+                <ul id="closing-questions" class="space-y-2 text-gray-700"></ul>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 错误状态 */}
+        <div id="error" class="hidden text-center py-12">
+          <i class="fas fa-exclamation-circle text-3xl text-red-400 mb-4"></i>
+          <p id="error-text" class="text-red-500">生成失败</p>
+          <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">
+            重试
+          </button>
+        </div>
+      </main>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', async function() {
+            const jobId = '${jobId}';
+            const loading = document.getElementById('loading');
+            const content = document.getElementById('content');
+            const error = document.getElementById('error');
+            const errorText = document.getElementById('error-text');
+            const statusBadge = document.getElementById('status-badge');
+
+            // 存储数据用于复制
+            let interviewData = null;
+
+            // Tab 切换
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+              btn.addEventListener('click', function() {
+                const tab = this.getAttribute('data-tab');
+                // 更新按钮样式
+                document.querySelectorAll('.tab-btn').forEach(b => {
+                  b.classList.remove('border-black', 'text-black');
+                  b.classList.add('border-transparent', 'text-gray-500');
+                });
+                this.classList.remove('border-transparent', 'text-gray-500');
+                this.classList.add('border-black', 'text-black');
+                // 显示对应内容
+                document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+                document.getElementById('tab-' + tab).classList.remove('hidden');
+              });
+            });
+
+            // 获取数据
+            const jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+            const job = jobs.find(j => j.id === jobId);
+            const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+            const resume = resumes[0];
+
+            if (!job || !resume) {
+              loading.classList.add('hidden');
+              error.classList.remove('hidden');
+              errorText.textContent = '缺少岗位或简历数据';
+              return;
+            }
+
+            // 获取匹配结果（从localStorage或使用默认值）
+            const matches = JSON.parse(localStorage.getItem('jobcopilot_matches') || '[]');
+            let match = matches.find(m => m.job_id === jobId);
+            if (!match) {
+              match = {
+                match_level: '匹配度还可以',
+                match_score: 60,
+                strengths: [],
+                gaps: [],
+              };
+            }
+
+            // 更新进度
+            function updateProgress(step, status) {
+              const el = document.getElementById('step-' + step);
+              if (!el) return;
+              const icon = el.querySelector('i');
+              if (status === 'running') {
+                icon.className = 'fas fa-spinner loading-spinner text-blue-500';
+              } else if (status === 'done') {
+                icon.className = 'fas fa-check-circle text-green-500';
+              } else if (status === 'error') {
+                icon.className = 'fas fa-times-circle text-red-500';
+              }
+            }
+
+            try {
+              updateProgress('company', 'running');
+              
+              // 调用面试准备API
+              const response = await fetch('/api/job/' + jobId + '/interview', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  job: job,
+                  resume: resume,
+                  match: match,
+                }),
+              });
+
+              const result = await response.json();
+
+              if (!result.success) {
+                throw new Error(result.error || '生成失败');
+              }
+
+              updateProgress('company', 'done');
+              updateProgress('interview', 'done');
+
+              interviewData = result;
+
+              // 渲染公司分析
+              const ca = result.company_analysis;
+              document.getElementById('company-name').textContent = ca.company_profile.name;
+              document.getElementById('company-info').textContent = 
+                ca.company_profile.industry + ' | ' + ca.company_profile.stage + ' | ' + ca.company_profile.scale;
+              document.getElementById('ai-scenarios').textContent = 
+                ca.ai_scenarios.current_ai_usage.slice(0, 3).join('、') || '-';
+              document.getElementById('ai-focus').textContent = ca.ai_scenarios.role_ai_focus || '-';
+              document.getElementById('competitors').textContent = 
+                ca.competitor_analysis.direct_competitors.map(c => c.name).join('、') || '-';
+              document.getElementById('interview-tips').textContent = 
+                ca.interview_insights.interview_tips.slice(0, 2).join('；') || '-';
+
+              // 渲染自我介绍
+              const prep = result.interview_prep;
+              document.getElementById('intro-1min').textContent = prep.self_introduction.version_1min;
+              document.getElementById('intro-2min').textContent = prep.self_introduction.version_2min;
+              renderList('delivery-tips', prep.self_introduction.delivery_tips, '💡');
+
+              // 渲染项目推荐
+              renderProjects(prep.project_recommendations);
+
+              // 渲染面试题目
+              renderQuestions('questions-you', prep.interview_questions.about_you, 'blue');
+              renderQuestions('questions-company', prep.interview_questions.about_company, 'green');
+              renderQuestions('questions-future', prep.interview_questions.about_future, 'purple');
+
+              // 渲染面试策略
+              document.getElementById('impression-goal').textContent = prep.overall_strategy.impression_goal;
+              renderList('key-messages', prep.overall_strategy.key_messages, '✓');
+              renderList('avoid-topics', prep.overall_strategy.avoid_topics, '✗');
+              renderList('closing-questions', prep.overall_strategy.closing_questions, '?');
+
+              // 存储到localStorage
+              const interviews = JSON.parse(localStorage.getItem('jobcopilot_interviews') || '[]');
+              const existing = interviews.findIndex(i => i.job_id === jobId);
+              const interviewRecord = {
+                id: jobId + '_interview',
+                job_id: jobId,
+                ...result,
+                created_at: new Date().toISOString(),
+              };
+              if (existing >= 0) {
+                interviews[existing] = interviewRecord;
+              } else {
+                interviews.unshift(interviewRecord);
+              }
+              localStorage.setItem('jobcopilot_interviews', JSON.stringify(interviews));
+
+              // 显示内容
+              loading.classList.add('hidden');
+              content.classList.remove('hidden');
+              statusBadge.classList.remove('hidden');
+              document.getElementById('page-title').textContent = '面试准备 - ' + job.title;
+
+            } catch (err) {
+              console.error('生成失败:', err);
+              updateProgress('company', 'error');
+              loading.classList.add('hidden');
+              error.classList.remove('hidden');
+              errorText.textContent = err.message || '生成失败';
+            }
+
+            function renderList(containerId, items, prefix) {
+              const container = document.getElementById(containerId);
+              if (!items || items.length === 0) {
+                container.innerHTML = '<li class="text-gray-400">暂无</li>';
+                return;
+              }
+              container.innerHTML = items.map(item => 
+                '<li>' + prefix + ' ' + item + '</li>'
+              ).join('');
+            }
+
+            function renderProjects(projects) {
+              const container = document.getElementById('projects-list');
+              if (!projects || projects.length === 0) {
+                container.innerHTML = '<p class="text-gray-400 text-center py-8">暂无项目推荐</p>';
+                return;
+              }
+              container.innerHTML = projects.map((p, i) => 
+                '<div class="bg-gray-50 rounded-xl p-6">' +
+                '<div class="flex items-center justify-between mb-3">' +
+                '<h4 class="font-semibold">' +
+                '<span class="w-6 h-6 bg-blue-100 text-blue-600 rounded-full inline-flex items-center justify-center mr-2 text-sm">' + (i + 1) + '</span>' +
+                p.project_name +
+                '</h4>' +
+                '<button onclick="JobCopilot.copySection(\\'project-' + i + '\\')" class="text-gray-400 hover:text-gray-600 text-sm">' +
+                '<i class="fas fa-copy mr-1"></i>复制' +
+                '</button>' +
+                '</div>' +
+                '<p class="text-sm text-gray-600 mb-3"><span class="text-gray-500">推荐理由：</span>' + p.match_reason + '</p>' +
+                '<div class="space-y-2 text-sm">' +
+                '<div><span class="text-gray-500">讲述重点：</span>' + p.focus_points.join('、') + '</div>' +
+                '<div><span class="text-gray-500">可能追问：</span>' + p.expected_questions.join('、') + '</div>' +
+                '<div class="bg-white p-3 rounded-lg mt-3">' +
+                '<span class="text-gray-500">故事大纲：</span>' +
+                '<p class="text-gray-700 mt-1">' + p.story_outline + '</p>' +
+                '</div>' +
+                '</div>' +
+                '</div>'
+              ).join('');
+            }
+
+            function renderQuestions(containerId, questions, color) {
+              const container = document.getElementById(containerId);
+              if (!questions || questions.length === 0) {
+                container.innerHTML = '<p class="text-gray-400">暂无</p>';
+                return;
+              }
+              container.innerHTML = questions.map((q, i) => 
+                '<div class="border border-gray-200 rounded-xl overflow-hidden">' +
+                '<div class="question-header flex items-center justify-between p-4 bg-gray-50 cursor-pointer hover:bg-gray-100" data-index="' + containerId + '-' + i + '">' +
+                '<div class="flex items-center gap-2">' +
+                '<span class="px-2 py-0.5 bg-' + color + '-100 text-' + color + '-600 text-xs rounded">' + q.category + '</span>' +
+                '<span class="font-medium">' + q.question + '</span>' +
+                '</div>' +
+                '<i class="fas fa-chevron-down toggle-icon text-gray-400"></i>' +
+                '</div>' +
+                '<div id="answer-' + containerId + '-' + i + '" class="p-4 border-t border-gray-200 hidden">' +
+                '<div class="space-y-3 text-sm">' +
+                '<div class="bg-blue-50 p-3 rounded-lg">' +
+                '<span class="font-medium text-blue-700">P - 观点：</span>' +
+                '<p class="text-blue-800 mt-1">' + q.prep_answer.point + '</p>' +
+                '</div>' +
+                '<div class="bg-green-50 p-3 rounded-lg">' +
+                '<span class="font-medium text-green-700">R - 原因：</span>' +
+                '<p class="text-green-800 mt-1">' + q.prep_answer.reason + '</p>' +
+                '</div>' +
+                '<div class="bg-yellow-50 p-3 rounded-lg">' +
+                '<span class="font-medium text-yellow-700">E - 例子：</span>' +
+                '<p class="text-yellow-800 mt-1">' + q.prep_answer.example + '</p>' +
+                '</div>' +
+                '<div class="bg-purple-50 p-3 rounded-lg">' +
+                '<span class="font-medium text-purple-700">P - 重申：</span>' +
+                '<p class="text-purple-800 mt-1">' + q.prep_answer.point_reiterate + '</p>' +
+                '</div>' +
+                '<button onclick="JobCopilot.copyPREP(' + i + ', \\'' + containerId + '\\')" class="mt-2 text-gray-500 hover:text-gray-700 text-sm">' +
+                '<i class="fas fa-copy mr-1"></i>复制完整回答' +
+                '</button>' +
+                '</div>' +
+                '</div>' +
+                '</div>'
+              ).join('');
+
+              // 绑定折叠事件
+              container.querySelectorAll('.question-header').forEach(header => {
+                header.addEventListener('click', function() {
+                  const index = this.getAttribute('data-index');
+                  const answer = document.getElementById('answer-' + index);
+                  const icon = this.querySelector('.toggle-icon');
+                  answer.classList.toggle('hidden');
+                  icon.classList.toggle('fa-chevron-down');
+                  icon.classList.toggle('fa-chevron-up');
+                });
+              });
+            }
+
+            // 复制功能
+            window.JobCopilot = window.JobCopilot || {};
+            window.JobCopilot.copySection = function(section) {
+              let text = '';
+              if (section === 'intro-1min') {
+                text = document.getElementById('intro-1min').textContent;
+              } else if (section === 'intro-2min') {
+                text = document.getElementById('intro-2min').textContent;
+              } else if (section === 'closing-questions') {
+                const items = document.getElementById('closing-questions').querySelectorAll('li');
+                text = Array.from(items).map(li => li.textContent).join('\\n');
+              } else if (section === 'company' && interviewData) {
+                const ca = interviewData.company_analysis;
+                text = '【公司分析】\\n' +
+                  '公司：' + ca.company_profile.name + '\\n' +
+                  '行业：' + ca.company_profile.industry + '\\n' +
+                  'AI应用场景：' + ca.ai_scenarios.current_ai_usage.join('、') + '\\n' +
+                  '岗位AI重点：' + ca.ai_scenarios.role_ai_focus + '\\n' +
+                  '面试建议：' + ca.interview_insights.interview_tips.join('；');
+              } else if (section.startsWith('project-') && interviewData) {
+                const idx = parseInt(section.split('-')[1]);
+                const p = interviewData.interview_prep.project_recommendations[idx];
+                if (p) {
+                  text = '【项目：' + p.project_name + '】\\n' +
+                    '推荐理由：' + p.match_reason + '\\n' +
+                    '讲述重点：' + p.focus_points.join('、') + '\\n' +
+                    '故事大纲：' + p.story_outline;
+                }
+              }
+              if (text) {
+                navigator.clipboard.writeText(text).then(() => {
+                  showToast('已复制到剪贴板');
+                });
+              }
+            };
+
+            window.JobCopilot.copyPREP = function(idx, containerId) {
+              if (!interviewData) return;
+              const prep = interviewData.interview_prep;
+              let questions;
+              if (containerId === 'questions-you') {
+                questions = prep.interview_questions.about_you;
+              } else if (containerId === 'questions-company') {
+                questions = prep.interview_questions.about_company;
+              } else {
+                questions = prep.interview_questions.about_future;
+              }
+              const q = questions[idx];
+              if (q) {
+                const text = '问题：' + q.question + '\\n\\n' +
+                  '【观点】' + q.prep_answer.point + '\\n\\n' +
+                  '【原因】' + q.prep_answer.reason + '\\n\\n' +
+                  '【例子】' + q.prep_answer.example + '\\n\\n' +
+                  '【总结】' + q.prep_answer.point_reiterate;
+                navigator.clipboard.writeText(text).then(() => {
+                  showToast('已复制到剪贴板');
+                });
+              }
+            };
+
+            function showToast(message) {
+              const toast = document.createElement('div');
+              toast.className = 'fixed bottom-4 right-4 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50';
+              toast.textContent = message;
+              document.body.appendChild(toast);
+              setTimeout(() => toast.remove(), 2000);
+            }
+          });
+        `
+      }} />
+    </div>,
+    { title: '面试准备 - Job Copilot' }
+  )
+})
+
 // ==================== API 路由 ====================
 
 // 挂载岗位相关路由
@@ -1310,13 +1842,16 @@ app.route('/api/resume', resumeRoutes)
 // 挂载匹配相关路由
 app.route('/api/job', matchRoutes)
 
+// 挂载面试准备相关路由
+app.route('/api/job', interviewRoutes)
+
 // API健康检查
 app.get('/api/health', (c) => {
   return c.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '0.3.0',
-    phase: 'Phase 2 - 简历解析与匹配',
+    version: '0.4.0',
+    phase: 'Phase 3 - 面试准备',
   })
 })
 
