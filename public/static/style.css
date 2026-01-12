@@ -1,0 +1,116 @@
+/* Job Copilot - 自定义样式 */
+
+/* 全局样式 */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  line-height: 1.6;
+}
+
+/* 匹配度进度条颜色 */
+.match-excellent { background-color: #10B981; }
+.match-good { background-color: #3B82F6; }
+.match-fair { background-color: #F59E0B; }
+.match-poor { background-color: #EF4444; }
+
+/* 匹配状态标签 */
+.status-match { color: #10B981; }
+.status-partial { color: #F59E0B; }
+.status-mismatch { color: #EF4444; }
+
+/* 卡片悬浮效果 */
+.card-hover {
+  transition: all 0.2s ease;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 加载动画 */
+.loading-spinner {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* Agent 状态指示器 */
+.agent-pending { background-color: #E5E7EB; }
+.agent-running { background-color: #3B82F6; animation: pulse 1.5s infinite; }
+.agent-completed { background-color: #10B981; }
+.agent-error { background-color: #EF4444; }
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* 折叠面板动画 */
+.collapse-content {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease;
+}
+.collapse-content.open {
+  max-height: 2000px;
+}
+
+/* Tab 下划线 */
+.tab-active {
+  border-bottom: 2px solid #000000;
+}
+
+/* 复制按钮反馈 */
+.copy-success {
+  animation: copy-flash 0.3s ease;
+}
+@keyframes copy-flash {
+  0% { background-color: #10B981; }
+  100% { background-color: transparent; }
+}
+
+/* 响应式工具 */
+@media (max-width: 768px) {
+  .mobile-hidden {
+    display: none;
+  }
+  .mobile-full {
+    width: 100%;
+  }
+}
+
+/* 文本截断 */
+.line-clamp-2 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.line-clamp-3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: #F3F4F6;
+}
+::-webkit-scrollbar-thumb {
+  background: #D1D5DB;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #9CA3AF;
+}
