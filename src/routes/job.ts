@@ -10,6 +10,15 @@ import { executeJDStructure } from '../agents/jd-structure';
 import { executeAAnalysis } from '../agents/jd-analysis-a';
 import { executeBAnalysis } from '../agents/jd-analysis-b';
 import type { Job, StructuredJD, AAnalysis, DAGState } from '../types';
+import { 
+  scrapeJobUrl, 
+  validateUrl, 
+  identifyPlatform, 
+  getSupportedPlatforms,
+  setPlatformCookie,
+  getPlatformCookie,
+  getAllCookies
+} from '../core/scraper';
 
 const jobRoutes = new Hono();
 
@@ -316,6 +325,56 @@ jobRoutes.post('/parse-sync', async (c) => {
   }
 });
 
+// ============ 静态路由（必须放在动态路由之前） ============
+
+/**
+ * GET /api/job/platforms - 获取支持的平台列表
+ */
+jobRoutes.get('/platforms', async (c) => {
+  const platforms = getSupportedPlatforms();
+  const cookies = getAllCookies();
+  
+  return c.json({
+    success: true,
+    platforms: platforms.map(p => ({
+      ...p,
+      hasCookie: cookies[p.name] || false,
+    })),
+  });
+});
+
+/**
+ * GET /api/job/cookie - 获取已设置的 Cookie 状态
+ */
+jobRoutes.get('/cookie', async (c) => {
+  const cookies = getAllCookies();
+  const platforms = getSupportedPlatforms();
+  
+  return c.json({
+    success: true,
+    cookies: platforms.map(p => ({
+      platform: p.name,
+      displayName: p.displayName,
+      hasSet: cookies[p.name] || false,
+    })),
+  });
+});
+
+/**
+ * GET /api/jobs - 获取岗位列表
+ */
+jobRoutes.get('/', async (c) => {
+  const jobs = jobStorage.getAll();
+  
+  return c.json({
+    success: true,
+    jobs,
+    total: jobs.length,
+  });
+});
+
+// ============ 动态路由 ============
+
 /**
  * GET /api/job/:id/status - 获取解析状态
  */
@@ -350,19 +409,6 @@ jobRoutes.get('/:id', async (c) => {
   return c.json({
     success: true,
     job,
-  });
-});
-
-/**
- * GET /api/jobs - 获取岗位列表
- */
-jobRoutes.get('/', async (c) => {
-  const jobs = jobStorage.getAll();
-  
-  return c.json({
-    success: true,
-    jobs,
-    total: jobs.length,
   });
 });
 
@@ -424,6 +470,211 @@ jobRoutes.delete('/:id', async (c) => {
   }
 
   return c.json({ success: true });
+});
+
+// ============ URL 爬虫相关 API ============
+
+/**
+ * POST /api/job/parse-url - 通过 URL 爬取并解析 JD
+ */
+jobRoutes.post('/parse-url', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { url, debug } = body;
+
+    // 验证 URL
+    const urlValidation = validateUrl(url);
+    if (!urlValidation.valid) {
+      return c.json({ success: false, error: urlValidation.error }, 400);
+    }
+
+    // 识别平台
+    const platform = identifyPlatform(url);
+    if (!platform) {
+      return c.json({ 
+        success: false, 
+        error: '暂不支持该平台，目前支持：Boss直聘、拉勾、猎聘' 
+      }, 400);
+    }
+
+    const jobId = generateId();
+    console.log(`[API] URL解析开始，ID: ${jobId}, URL: ${url}, 平台: ${platform.displayName}`);
+
+    // 获取平台 Cookie（如果有）
+    const cookie = getPlatformCookie(platform.name);
+
+    // 步骤1：爬取页面内容
+    const scrapeResult = await scrapeJobUrl(url, { cookie, debug });
+    
+    if (!scrapeResult.success || !scrapeResult.data) {
+      console.error(`[API] URL爬取失败，ID: ${jobId}`, scrapeResult.error);
+      return c.json({ 
+        success: false, 
+        error: scrapeResult.error || '爬取失败',
+        meta: scrapeResult.meta,
+      }, 400);
+    }
+
+    console.log(`[API] URL爬取成功，ID: ${jobId}, 耗时: ${scrapeResult.meta.fetchTime}ms`);
+
+    // 步骤2：执行 JD 解析 DAG
+    const result = await runJDParseDAG(
+      { 
+        type: 'text', 
+        content: scrapeResult.data.jdContent 
+      },
+      jobId
+    );
+
+    if (!result.success) {
+      console.error(`[API] JD解析失败，ID: ${jobId}`, result.error);
+      return c.json({ 
+        success: false, 
+        error: result.error,
+        scrapeData: scrapeResult.data,
+        meta: scrapeResult.meta,
+      }, 500);
+    }
+
+    // 创建完整的岗位记录
+    const job: Job = {
+      id: jobId,
+      title: result.structuredJD?.title || scrapeResult.data.title || '未知岗位',
+      company: result.structuredJD?.company || scrapeResult.data.company || '未知公司',
+      job_url: url,  // 保存原始 URL
+      raw_content: result.cleanedText || scrapeResult.data.jdContent,
+      source_type: 'url',
+      structured_jd: result.structuredJD ? {
+        ...result.structuredJD,
+        // 补充爬取到的信息
+        salary: result.structuredJD.salary || scrapeResult.data.salary || undefined,
+        location: result.structuredJD.location || scrapeResult.data.location || undefined,
+      } : undefined,
+      a_analysis: result.aAnalysis,
+      b_analysis: result.bAnalysis,
+      status: 'completed',
+      created_at: now(),
+      updated_at: now(),
+    };
+
+    console.log(`[API] URL解析完成，ID: ${jobId}, 标题: ${job.title}, 公司: ${job.company}`);
+
+    return c.json({
+      success: true,
+      job,
+      dagState: dagStates.get(jobId),
+      metrics: result.metrics,
+      scrapeMeta: scrapeResult.meta,
+    });
+  } catch (error) {
+    console.error('[API] URL解析异常:', error);
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '未知错误' 
+    }, 500);
+  }
+});
+
+/**
+ * POST /api/job/validate-url - 验证 URL 是否支持爬取
+ */
+jobRoutes.post('/validate-url', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { url } = body;
+
+    const validation = validateUrl(url);
+    if (!validation.valid) {
+      return c.json({ 
+        valid: false, 
+        error: validation.error 
+      });
+    }
+
+    const platform = identifyPlatform(url);
+    return c.json({
+      valid: true,
+      platform: platform ? {
+        name: platform.name,
+        displayName: platform.displayName,
+        requiresCookie: platform.requiresCookie,
+        hasCookie: !!getPlatformCookie(platform.name),
+      } : null,
+    });
+  } catch (error) {
+    return c.json({ 
+      valid: false, 
+      error: error instanceof Error ? error.message : '验证失败' 
+    });
+  }
+});
+
+/**
+ * POST /api/job/cookie - 设置平台 Cookie
+ */
+jobRoutes.post('/cookie', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { platform, cookie } = body;
+
+    if (!platform || !cookie) {
+      return c.json({ 
+        success: false, 
+        error: '请提供 platform 和 cookie' 
+      }, 400);
+    }
+
+    // 验证平台是否支持
+    const platforms = getSupportedPlatforms();
+    const validPlatform = platforms.find(p => p.name === platform);
+    if (!validPlatform) {
+      return c.json({ 
+        success: false, 
+        error: `不支持的平台: ${platform}` 
+      }, 400);
+    }
+
+    // 保存 Cookie
+    setPlatformCookie(platform, cookie);
+
+    console.log(`[API] Cookie已设置，平台: ${platform}`);
+
+    return c.json({
+      success: true,
+      message: `${validPlatform.displayName} Cookie 设置成功`,
+    });
+  } catch (error) {
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '设置失败' 
+    }, 500);
+  }
+});
+
+/**
+ * DELETE /api/job/cookie/:platform - 删除平台 Cookie
+ */
+jobRoutes.delete('/cookie/:platform', async (c) => {
+  const platform = c.req.param('platform');
+  
+  const platforms = getSupportedPlatforms();
+  const validPlatform = platforms.find(p => p.name === platform);
+  if (!validPlatform) {
+    return c.json({ 
+      success: false, 
+      error: `不支持的平台: ${platform}` 
+    }, 404);
+  }
+
+  // 清除 Cookie（设置为空）
+  setPlatformCookie(platform, '');
+
+  console.log(`[API] Cookie已删除，平台: ${platform}`);
+
+  return c.json({
+    success: true,
+    message: `${validPlatform.displayName} Cookie 已删除`,
+  });
 });
 
 export default jobRoutes;

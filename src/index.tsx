@@ -226,17 +226,35 @@ app.get('/job/new', (c) => {
   return c.render(
     <div class="min-h-screen bg-white">
       <header class="border-b border-gray-100">
-        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center">
-          <a href="/" class="text-gray-500 hover:text-gray-700 mr-4">
-            <i class="fas fa-arrow-left"></i>
+        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
+          <div class="flex items-center">
+            <a href="/" class="text-gray-500 hover:text-gray-700 mr-4">
+              <i class="fas fa-arrow-left"></i>
+            </a>
+            <h1 class="text-xl font-bold">新建岗位解析</h1>
+          </div>
+          <a href="/job/cookie-settings" class="text-sm text-gray-500 hover:text-gray-700">
+            <i class="fas fa-cog mr-1"></i>Cookie设置
           </a>
-          <h1 class="text-xl font-bold">新建岗位解析</h1>
         </div>
       </header>
       
       <main class="max-w-4xl mx-auto px-4 py-8">
-        {/* 输入区域 */}
-        <div class="space-y-6">
+        {/* 输入方式选择 Tab */}
+        <div class="mb-6">
+          <div class="flex border-b border-gray-200">
+            <button id="tab-manual" class="px-4 py-3 text-sm font-medium border-b-2 border-black text-black -mb-px">
+              <i class="fas fa-edit mr-2"></i>手动输入
+            </button>
+            <button id="tab-url" class="px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 -mb-px">
+              <i class="fas fa-link mr-2"></i>URL爬取
+              <span class="ml-1 text-xs px-1.5 py-0.5 bg-green-100 text-green-600 rounded">新</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 手动输入区域 */}
+        <div id="panel-manual" class="space-y-6">
           {/* 图片上传 */}
           <div>
             <label class="block text-sm font-medium text-gray-700 mb-2">
@@ -314,7 +332,111 @@ app.get('/job/new', (c) => {
           </div>
         </div>
 
-        {/* 解析进度区域 */}
+        {/* URL爬取区域 */}
+        <div id="panel-url" class="hidden space-y-6">
+          {/* 支持的平台提示 */}
+          <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
+            <h4 class="text-sm font-medium text-blue-700 mb-2">
+              <i class="fas fa-info-circle mr-2"></i>支持的招聘平台
+            </h4>
+            <div id="supported-platforms" class="flex flex-wrap gap-2">
+              <span class="text-xs px-2 py-1 bg-white border border-blue-200 rounded-full text-blue-600">
+                <i class="fas fa-check-circle mr-1"></i>Boss直聘
+              </span>
+              <span class="text-xs px-2 py-1 bg-white border border-blue-200 rounded-full text-blue-600">
+                <i class="fas fa-check-circle mr-1"></i>拉勾
+              </span>
+              <span class="text-xs px-2 py-1 bg-white border border-blue-200 rounded-full text-blue-600">
+                <i class="fas fa-check-circle mr-1"></i>猎聘
+              </span>
+            </div>
+            <p class="text-xs text-blue-600 mt-2">
+              <i class="fas fa-lightbulb mr-1"></i>
+              粘贴招聘网站的岗位详情页URL，系统将自动爬取并解析JD内容
+            </p>
+          </div>
+
+          {/* URL输入 */}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              <i class="fas fa-link mr-1 text-blue-500"></i>
+              岗位详情页URL
+            </label>
+            <div class="relative">
+              <input 
+                type="url"
+                id="scrape-url"
+                class="w-full px-4 py-4 pr-24 border border-gray-200 rounded-xl focus:border-blue-400 focus:ring-2 focus:ring-blue-100 focus:outline-none text-base"
+                placeholder="https://www.zhipin.com/job_detail/xxx.html"
+              />
+              <button 
+                id="validate-url-btn"
+                class="absolute right-2 top-1/2 -translate-y-1/2 px-3 py-1.5 text-xs text-blue-500 hover:text-blue-600"
+              >
+                <i class="fas fa-check-circle mr-1"></i>验证
+              </button>
+            </div>
+            <div id="scrape-url-status" class="mt-2 hidden">
+              {/* 验证状态显示 */}
+            </div>
+          </div>
+
+          {/* Cookie 状态提示 */}
+          <div id="cookie-status" class="bg-gray-50 rounded-xl p-4">
+            <div class="flex items-center justify-between mb-2">
+              <h4 class="text-sm font-medium text-gray-700">
+                <i class="fas fa-cookie mr-2 text-orange-400"></i>Cookie状态
+              </h4>
+              <a href="/job/cookie-settings" class="text-xs text-blue-500 hover:text-blue-600">
+                配置Cookie →
+              </a>
+            </div>
+            <div id="cookie-list" class="flex flex-wrap gap-2">
+              {/* 动态渲染Cookie状态 */}
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+              <i class="fas fa-info-circle mr-1"></i>
+              部分页面可能需要登录态Cookie才能正常爬取
+            </p>
+          </div>
+
+          {/* 开始爬取按钮 */}
+          <div class="flex justify-center">
+            <button 
+              id="scrape-btn"
+              class="px-8 py-3 bg-blue-500 text-white rounded-xl font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <i class="fas fa-spider mr-2"></i>
+              开始爬取并解析
+            </button>
+          </div>
+
+          {/* 爬取进度 */}
+          <div id="scrape-progress" class="hidden">
+            <div class="bg-gray-50 rounded-xl p-6">
+              <h3 class="font-semibold mb-4">
+                <i class="fas fa-spinner loading-spinner mr-2"></i>
+                <span id="scrape-status-text">正在爬取...</span>
+              </h3>
+              <div class="space-y-3">
+                <div id="scrape-step-fetch" class="flex items-center gap-3">
+                  <i class="fas fa-circle text-gray-300"></i>
+                  <span class="text-gray-500">页面爬取</span>
+                </div>
+                <div id="scrape-step-extract" class="flex items-center gap-3">
+                  <i class="fas fa-circle text-gray-300"></i>
+                  <span class="text-gray-500">内容提取</span>
+                </div>
+                <div id="scrape-step-parse" class="flex items-center gap-3">
+                  <i class="fas fa-circle text-gray-300"></i>
+                  <span class="text-gray-500">JD解析</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* 解析进度区域（手动输入用） */}
         <div id="parse-progress" class="hidden mt-8">
           <div class="bg-gray-50 rounded-xl p-6">
             <h3 class="font-semibold mb-4">
@@ -340,6 +462,34 @@ app.get('/job/new', (c) => {
       <script dangerouslySetInnerHTML={{
         __html: `
           document.addEventListener('DOMContentLoaded', function() {
+            // ==================== Tab 切换 ====================
+            const tabManual = document.getElementById('tab-manual');
+            const tabUrl = document.getElementById('tab-url');
+            const panelManual = document.getElementById('panel-manual');
+            const panelUrl = document.getElementById('panel-url');
+            
+            function switchTab(tab) {
+              if (tab === 'manual') {
+                tabManual.className = 'px-4 py-3 text-sm font-medium border-b-2 border-black text-black -mb-px';
+                tabUrl.className = 'px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 -mb-px';
+                panelManual.classList.remove('hidden');
+                panelUrl.classList.add('hidden');
+              } else {
+                tabUrl.className = 'px-4 py-3 text-sm font-medium border-b-2 border-blue-500 text-blue-600 -mb-px';
+                tabManual.className = 'px-4 py-3 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent hover:border-gray-300 -mb-px';
+                panelUrl.classList.remove('hidden');
+                panelManual.classList.add('hidden');
+                // 加载 Cookie 状态
+                loadCookieStatus();
+              }
+              // 隐藏错误提示
+              errorArea.classList.add('hidden');
+            }
+            
+            tabManual.addEventListener('click', () => switchTab('manual'));
+            tabUrl.addEventListener('click', () => switchTab('url'));
+
+            // ==================== 手动输入区域 ====================
             const uploadArea = document.getElementById('upload-area');
             const fileInput = document.getElementById('jd-image');
             const textInput = document.getElementById('jd-text');
@@ -427,8 +577,9 @@ app.get('/job/new', (c) => {
 
             // 剪贴板粘贴图片支持
             document.addEventListener('paste', function(e) {
-              // 如果焦点在文本输入框，不处理图片粘贴
-              if (document.activeElement === textInput) {
+              // 如果焦点在文本输入框或URL输入框，不处理图片粘贴
+              if (document.activeElement === textInput || 
+                  document.activeElement === scrapeUrlInput) {
                 return;
               }
               
@@ -446,6 +597,8 @@ app.get('/job/new', (c) => {
                       window.JobCopilot.showToast('截图已粘贴', 'success');
                     }
                     handleImageSelect(file);
+                    // 确保切换到手动输入 Tab
+                    switchTab('manual');
                   }
                   break;
                 }
@@ -459,17 +612,6 @@ app.get('/job/new', (c) => {
             });
             uploadArea.addEventListener('blur', function() {
               uploadArea.classList.remove('border-blue-400', 'ring-2', 'ring-blue-100');
-            });
-            
-            // 键盘快捷键提示
-            uploadArea.addEventListener('keydown', function(e) {
-              if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-                // paste 事件会自动触发，这里只是为了视觉反馈
-                uploadArea.classList.add('bg-blue-50');
-                setTimeout(() => {
-                  uploadArea.classList.remove('bg-blue-50');
-                }, 200);
-              }
             });
 
             // 岗位链接输入框
@@ -618,11 +760,373 @@ app.get('/job/new', (c) => {
                   '</div>';
               }).join('');
             }
+
+            // ==================== URL爬取区域 ====================
+            const scrapeUrlInput = document.getElementById('scrape-url');
+            const scrapeUrlStatus = document.getElementById('scrape-url-status');
+            const validateUrlBtn = document.getElementById('validate-url-btn');
+            const scrapeBtn = document.getElementById('scrape-btn');
+            const scrapeProgress = document.getElementById('scrape-progress');
+            const scrapeStatusText = document.getElementById('scrape-status-text');
+            const cookieList = document.getElementById('cookie-list');
+
+            // 加载 Cookie 状态
+            async function loadCookieStatus() {
+              try {
+                const response = await fetch('/api/job/cookie');
+                const result = await response.json();
+                if (result.success) {
+                  cookieList.innerHTML = result.cookies.map(c => {
+                    const color = c.hasSet ? 'green' : 'gray';
+                    const icon = c.hasSet ? 'fa-check-circle' : 'fa-circle';
+                    return '<span class="text-xs px-2 py-1 bg-' + color + '-50 border border-' + color + '-200 rounded-full text-' + color + '-600">' +
+                      '<i class="fas ' + icon + ' mr-1"></i>' + c.displayName +
+                      '</span>';
+                  }).join('');
+                }
+              } catch (error) {
+                console.error('加载Cookie状态失败:', error);
+              }
+            }
+
+            // URL 验证
+            validateUrlBtn.addEventListener('click', async function() {
+              const url = scrapeUrlInput.value.trim();
+              if (!url) {
+                showUrlStatus('请输入URL', 'error');
+                return;
+              }
+
+              validateUrlBtn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-1"></i>验证中';
+              
+              try {
+                const response = await fetch('/api/job/validate-url', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ url }),
+                });
+                const result = await response.json();
+                
+                if (result.valid && result.platform) {
+                  let statusHtml = '<div class="flex items-center gap-2 text-green-600">' +
+                    '<i class="fas fa-check-circle"></i>' +
+                    '<span>已识别: ' + result.platform.displayName + '</span>';
+                  if (result.platform.requiresCookie && !result.platform.hasCookie) {
+                    statusHtml += '<span class="text-yellow-600 text-xs">（建议配置Cookie）</span>';
+                  }
+                  statusHtml += '</div>';
+                  showUrlStatus(statusHtml, 'success');
+                } else {
+                  showUrlStatus(result.error || '不支持该URL', 'error');
+                }
+              } catch (error) {
+                showUrlStatus('验证失败: ' + error.message, 'error');
+              } finally {
+                validateUrlBtn.innerHTML = '<i class="fas fa-check-circle mr-1"></i>验证';
+              }
+            });
+
+            function showUrlStatus(html, type) {
+              scrapeUrlStatus.classList.remove('hidden');
+              if (type === 'error') {
+                scrapeUrlStatus.innerHTML = '<div class="flex items-center gap-2 text-red-600">' +
+                  '<i class="fas fa-times-circle"></i><span>' + html + '</span></div>';
+              } else {
+                scrapeUrlStatus.innerHTML = html;
+              }
+            }
+
+            // 更新爬取步骤状态
+            function updateScrapeStep(stepId, status) {
+              const step = document.getElementById(stepId);
+              if (!step) return;
+              
+              const icon = step.querySelector('i');
+              const text = step.querySelector('span');
+              
+              if (status === 'running') {
+                icon.className = 'fas fa-spinner loading-spinner text-blue-500';
+                text.className = 'text-blue-600';
+              } else if (status === 'completed') {
+                icon.className = 'fas fa-check-circle text-green-500';
+                text.className = 'text-green-600';
+              } else if (status === 'error') {
+                icon.className = 'fas fa-times-circle text-red-500';
+                text.className = 'text-red-600';
+              }
+            }
+
+            // 爬取按钮点击
+            scrapeBtn.addEventListener('click', async function() {
+              const url = scrapeUrlInput.value.trim();
+              if (!url) {
+                alert('请输入岗位详情页URL');
+                return;
+              }
+
+              // 显示进度
+              scrapeBtn.disabled = true;
+              scrapeBtn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-2"></i>爬取中...';
+              scrapeProgress.classList.remove('hidden');
+              errorArea.classList.add('hidden');
+
+              // 重置步骤状态
+              ['scrape-step-fetch', 'scrape-step-extract', 'scrape-step-parse'].forEach(id => {
+                const step = document.getElementById(id);
+                if (step) {
+                  step.querySelector('i').className = 'fas fa-circle text-gray-300';
+                  step.querySelector('span').className = 'text-gray-500';
+                }
+              });
+
+              try {
+                // 步骤1: 爬取页面
+                scrapeStatusText.textContent = '正在爬取页面...';
+                updateScrapeStep('scrape-step-fetch', 'running');
+
+                const response = await fetch('/api/job/parse-url', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ url }),
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                  // 更新步骤状态
+                  updateScrapeStep('scrape-step-fetch', 'completed');
+                  updateScrapeStep('scrape-step-extract', 'completed');
+                  updateScrapeStep('scrape-step-parse', 'completed');
+                  scrapeStatusText.textContent = '解析完成！';
+
+                  // 保存评测数据
+                  if (result.metrics && window.JobCopilot && window.JobCopilot.saveMetricsBatch) {
+                    window.JobCopilot.saveMetricsBatch(result.metrics);
+                  }
+                  
+                  // 跳转到详情页
+                  setTimeout(() => {
+                    // 将结果存储到localStorage
+                    const jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+                    jobs.unshift(result.job);
+                    localStorage.setItem('jobcopilot_jobs', JSON.stringify(jobs));
+                    
+                    // 跳转
+                    window.location.href = '/job/' + result.job.id;
+                  }, 1000);
+                } else {
+                  throw new Error(result.error || '爬取失败');
+                }
+              } catch (error) {
+                console.error('爬取失败:', error);
+                updateScrapeStep('scrape-step-fetch', 'error');
+                errorMessage.textContent = error.message || '爬取失败，请重试';
+                errorArea.classList.remove('hidden');
+                scrapeProgress.classList.add('hidden');
+                scrapeBtn.disabled = false;
+                scrapeBtn.innerHTML = '<i class="fas fa-spider mr-2"></i>开始爬取并解析';
+              }
+            });
+
+            // URL输入框回车触发爬取
+            scrapeUrlInput.addEventListener('keypress', function(e) {
+              if (e.key === 'Enter') {
+                scrapeBtn.click();
+              }
+            });
           });
         `
       }} />
     </div>,
     { title: '新建岗位解析 - Job Copilot' }
+  )
+})
+
+// Cookie 设置页面
+app.get('/job/cookie-settings', (c) => {
+  return c.render(
+    <div class="min-h-screen bg-white">
+      <header class="border-b border-gray-100">
+        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center">
+          <a href="/job/new" class="text-gray-500 hover:text-gray-700 mr-4">
+            <i class="fas fa-arrow-left"></i>
+          </a>
+          <h1 class="text-xl font-bold">Cookie 设置</h1>
+        </div>
+      </header>
+      
+      <main class="max-w-4xl mx-auto px-4 py-8">
+        {/* 说明 */}
+        <div class="bg-blue-50 border border-blue-100 rounded-xl p-4 mb-6">
+          <h4 class="text-sm font-medium text-blue-700 mb-2">
+            <i class="fas fa-info-circle mr-2"></i>为什么需要 Cookie？
+          </h4>
+          <p class="text-sm text-blue-600">
+            部分招聘网站的岗位详情页需要登录才能查看完整内容。通过配置 Cookie，可以让爬虫以登录状态访问页面，获取完整的 JD 信息。
+          </p>
+        </div>
+
+        {/* 获取 Cookie 教程 */}
+        <div class="mb-8">
+          <h3 class="text-lg font-semibold mb-4">
+            <i class="fas fa-book mr-2 text-purple-500"></i>如何获取 Cookie
+          </h3>
+          <div class="bg-gray-50 rounded-xl p-4 space-y-3 text-sm">
+            <div class="flex gap-3">
+              <span class="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0">1</span>
+              <span>在浏览器中登录招聘网站（如 Boss直聘、拉勾、猎聘）</span>
+            </div>
+            <div class="flex gap-3">
+              <span class="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0">2</span>
+              <span>按 F12 打开开发者工具，切换到 "Network"（网络）选项卡</span>
+            </div>
+            <div class="flex gap-3">
+              <span class="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0">3</span>
+              <span>刷新页面，在请求列表中点击第一个文档请求</span>
+            </div>
+            <div class="flex gap-3">
+              <span class="w-6 h-6 bg-purple-500 text-white rounded-full flex items-center justify-center text-xs flex-shrink-0">4</span>
+              <span>在 "Headers"（标头）中找到 "Cookie" 字段，复制完整内容</span>
+            </div>
+          </div>
+        </div>
+
+        {/* 平台列表 */}
+        <div id="platforms-list" class="space-y-4">
+          <h3 class="text-lg font-semibold mb-4">
+            <i class="fas fa-cookie mr-2 text-orange-400"></i>平台 Cookie 配置
+          </h3>
+          {/* 动态渲染 */}
+          <div class="text-center py-8 text-gray-400">
+            <i class="fas fa-spinner loading-spinner text-2xl mb-2"></i>
+            <p>加载中...</p>
+          </div>
+        </div>
+      </main>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', async function() {
+            const platformsList = document.getElementById('platforms-list');
+            
+            try {
+              // 获取平台列表
+              const response = await fetch('/api/job/platforms');
+              const result = await response.json();
+              
+              if (result.success) {
+                platformsList.innerHTML = '<h3 class="text-lg font-semibold mb-4">' +
+                  '<i class="fas fa-cookie mr-2 text-orange-400"></i>平台 Cookie 配置</h3>' +
+                  result.platforms.map(p => {
+                    const statusColor = p.hasCookie ? 'green' : 'gray';
+                    const statusText = p.hasCookie ? '已配置' : '未配置';
+                    return '<div class="bg-gray-50 rounded-xl p-4" data-platform="' + p.name + '">' +
+                      '<div class="flex items-center justify-between mb-3">' +
+                      '<div class="flex items-center gap-2">' +
+                      '<span class="font-medium">' + p.displayName + '</span>' +
+                      '<span class="text-xs px-2 py-0.5 bg-' + statusColor + '-100 text-' + statusColor + '-600 rounded-full">' + statusText + '</span>' +
+                      '</div>' +
+                      '<button class="delete-cookie-btn text-red-500 hover:text-red-600 text-sm ' + (p.hasCookie ? '' : 'hidden') + '" data-platform="' + p.name + '">' +
+                      '<i class="fas fa-trash-alt mr-1"></i>删除</button>' +
+                      '</div>' +
+                      '<div class="space-y-2">' +
+                      '<textarea class="cookie-input w-full px-3 py-2 border border-gray-200 rounded-lg text-sm h-20 resize-none focus:border-blue-400 focus:outline-none" ' +
+                      'placeholder="粘贴 ' + p.displayName + ' 的 Cookie..."></textarea>' +
+                      '<button class="save-cookie-btn w-full px-3 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600 disabled:opacity-50" data-platform="' + p.name + '">' +
+                      '<i class="fas fa-save mr-1"></i>保存 Cookie</button>' +
+                      '</div></div>';
+                  }).join('');
+
+                // 绑定保存事件
+                document.querySelectorAll('.save-cookie-btn').forEach(btn => {
+                  btn.addEventListener('click', async function() {
+                    const platform = this.dataset.platform;
+                    const container = this.closest('[data-platform]');
+                    const textarea = container.querySelector('.cookie-input');
+                    const cookie = textarea.value.trim();
+                    
+                    if (!cookie) {
+                      alert('请输入 Cookie');
+                      return;
+                    }
+                    
+                    this.disabled = true;
+                    this.innerHTML = '<i class="fas fa-spinner loading-spinner mr-1"></i>保存中...';
+                    
+                    try {
+                      const response = await fetch('/api/job/cookie', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ platform, cookie }),
+                      });
+                      const result = await response.json();
+                      
+                      if (result.success) {
+                        // 更新状态
+                        const statusSpan = container.querySelector('.text-xs');
+                        statusSpan.className = 'text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded-full';
+                        statusSpan.textContent = '已配置';
+                        container.querySelector('.delete-cookie-btn').classList.remove('hidden');
+                        textarea.value = '';
+                        
+                        if (window.JobCopilot && window.JobCopilot.showToast) {
+                          window.JobCopilot.showToast('Cookie 保存成功', 'success');
+                        } else {
+                          alert('Cookie 保存成功');
+                        }
+                      } else {
+                        throw new Error(result.error);
+                      }
+                    } catch (error) {
+                      alert('保存失败: ' + error.message);
+                    } finally {
+                      this.disabled = false;
+                      this.innerHTML = '<i class="fas fa-save mr-1"></i>保存 Cookie';
+                    }
+                  });
+                });
+
+                // 绑定删除事件
+                document.querySelectorAll('.delete-cookie-btn').forEach(btn => {
+                  btn.addEventListener('click', async function() {
+                    const platform = this.dataset.platform;
+                    if (!confirm('确定要删除该平台的 Cookie 吗？')) {
+                      return;
+                    }
+                    
+                    try {
+                      const response = await fetch('/api/job/cookie/' + platform, {
+                        method: 'DELETE',
+                      });
+                      const result = await response.json();
+                      
+                      if (result.success) {
+                        const container = this.closest('[data-platform]');
+                        const statusSpan = container.querySelector('.text-xs');
+                        statusSpan.className = 'text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded-full';
+                        statusSpan.textContent = '未配置';
+                        this.classList.add('hidden');
+                        
+                        if (window.JobCopilot && window.JobCopilot.showToast) {
+                          window.JobCopilot.showToast('Cookie 已删除', 'success');
+                        }
+                      }
+                    } catch (error) {
+                      alert('删除失败: ' + error.message);
+                    }
+                  });
+                });
+              }
+            } catch (error) {
+              platformsList.innerHTML = '<div class="text-center py-8 text-red-500">' +
+                '<i class="fas fa-exclamation-circle text-2xl mb-2"></i>' +
+                '<p>加载失败: ' + error.message + '</p></div>';
+            }
+          });
+        `
+      }} />
+    </div>,
+    { title: 'Cookie 设置 - Job Copilot' }
   )
 })
 
