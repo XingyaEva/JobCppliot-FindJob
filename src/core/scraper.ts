@@ -117,6 +117,9 @@ export interface ScrapeResult {
     salary: string;
     location: string;
     jdContent: string;        // 原始 JD 内容
+    // 额外信息（部分平台可提取）
+    experience?: string;      // 经验要求
+    education?: string;       // 学历要求
     rawHtml?: string;         // 原始 HTML（调试用）
   };
   error?: string;
@@ -296,6 +299,85 @@ async function fetchPage(
 }
 
 /**
+ * 从 Boss直聘 meta 标签提取结构化信息
+ * Boss直聘将关键信息放在 <title> 和 <meta description> 中
+ */
+interface BossMetaInfo {
+  title: string;
+  company: string;
+  salary: string;
+  location: string;
+  experience: string;
+  education: string;
+}
+
+function extractBossMetaInfo(html: string): BossMetaInfo | null {
+  const result: BossMetaInfo = {
+    title: '',
+    company: '',
+    salary: '',
+    location: '',
+    experience: '',
+    education: '',
+  };
+  
+  // 从 <title> 提取岗位名称和公司
+  // 格式：「AI产品经理招聘」_阿里巴巴集团招聘-BOSS直聘
+  const titleMatch = html.match(/<title>「([^」]+?)(?:招聘)?」_([^招]+?)(?:集团|公司)?招聘-BOSS直聘<\/title>/);
+  if (titleMatch) {
+    result.title = titleMatch[1].trim();
+    result.company = titleMatch[2].trim();
+  }
+  
+  // 从 <meta description> 提取详细信息
+  // 格式：XX公司XX岗位招聘，薪资：35-65K·16薪，地点：杭州，要求：5-10年，学历：本科，福利：...
+  const descMatch = html.match(/<meta\s+name="description"\s+content="([^"]+)"/);
+  if (descMatch) {
+    const desc = descMatch[1];
+    
+    // 提取薪资
+    const salaryMatch = desc.match(/薪资[：:]\s*([^，,]+)/);
+    if (salaryMatch) {
+      result.salary = salaryMatch[1].trim();
+    }
+    
+    // 提取地点
+    const locationMatch = desc.match(/地点[：:]\s*([^，,]+)/);
+    if (locationMatch) {
+      result.location = locationMatch[1].trim();
+    }
+    
+    // 提取经验要求
+    const expMatch = desc.match(/要求[：:]\s*([^，,]+)/);
+    if (expMatch) {
+      result.experience = expMatch[1].trim();
+    }
+    
+    // 提取学历
+    const eduMatch = desc.match(/学历[：:]\s*([^，,]+)/);
+    if (eduMatch) {
+      result.education = eduMatch[1].trim();
+    }
+    
+    // 如果公司名没从 title 提取到，尝试从 description 提取
+    if (!result.company) {
+      const companyMatch = desc.match(/^([^招]+?)(?:集团|公司)?[^，]*招聘/);
+      if (companyMatch) {
+        result.company = companyMatch[1].trim();
+      }
+    }
+  }
+  
+  // 至少要提取到标题才算成功
+  if (result.title || result.company) {
+    console.log(`[Scraper] Boss Meta 提取结果: 标题="${result.title}", 公司="${result.company}", 薪资="${result.salary}", 地点="${result.location}"`);
+    return result;
+  }
+  
+  return null;
+}
+
+/**
  * 从 HTML 中提取文本内容
  * 简化版：使用正则表达式提取（Cloudflare Workers 环境无 DOM 解析器）
  */
@@ -463,19 +545,50 @@ export async function scrapeJobUrl(
     
     console.log(`[Scraper] 页面获取成功，HTML 长度: ${html.length}`);
     
-    // 提取内容
-    const title = extractText(html, platform.selectors.title);
-    const company = extractText(html, platform.selectors.company);
-    const salary = platform.selectors.salary ? extractText(html, platform.selectors.salary) : '';
-    const location = platform.selectors.location ? extractText(html, platform.selectors.location) : '';
+    // Boss直聘特殊处理：优先从 meta 标签提取信息
+    let title = '';
+    let company = '';
+    let salary = '';
+    let location = '';
+    let experience = '';
+    let education = '';
+    
+    if (platform.name === 'zhipin') {
+      const bossInfo = extractBossMetaInfo(html);
+      if (bossInfo) {
+        title = bossInfo.title;
+        company = bossInfo.company;
+        salary = bossInfo.salary;
+        location = bossInfo.location;
+        experience = bossInfo.experience;
+        education = bossInfo.education;
+        console.log(`[Scraper] Boss Meta 提取成功: ${title} @ ${company}`);
+      }
+    }
+    
+    // 如果 meta 提取失败，回退到选择器提取
+    if (!title) {
+      title = extractText(html, platform.selectors.title);
+    }
+    if (!company) {
+      company = extractText(html, platform.selectors.company);
+    }
+    if (!salary && platform.selectors.salary) {
+      salary = extractText(html, platform.selectors.salary);
+    }
+    if (!location && platform.selectors.location) {
+      location = extractText(html, platform.selectors.location);
+    }
+    
+    // 提取 JD 正文内容
     const jdContent = extractJdContent(html, platform.selectors.jd);
     
-    console.log(`[Scraper] 提取结果: title="${title}", company="${company}", jd长度=${jdContent.length}`);
+    console.log(`[Scraper] 最终提取结果: title="${title}", company="${company}", salary="${salary}", location="${location}", jd长度=${jdContent.length}`);
     
     // 验证提取结果
     if (!jdContent || jdContent.length < 50) {
       // 调试时输出 HTML 前 2000 字符
-      console.log(`[Scraper] 提取失败，HTML 前 2000 字符: ${html.substring(0, 2000)}`);
+      console.log(`[Scraper] JD内容提取失败，HTML 前 2000 字符: ${html.substring(0, 2000)}`);
       
       return {
         success: false,
@@ -483,10 +596,10 @@ export async function scrapeJobUrl(
         data: options?.debug ? {
           title: title || '',
           company: company || '',
-          salary: '',
-          location: '',
+          salary: salary || '',
+          location: location || '',
           jdContent: '',
-          rawHtml: html.substring(0, 5000),  // 返回部分 HTML 用于调试
+          rawHtml: html.substring(0, 10000),  // 返回部分 HTML 用于调试
         } : undefined,
         meta: {
           url,
@@ -498,14 +611,18 @@ export async function scrapeJobUrl(
       };
     }
     
+    // 构建返回数据，空就是空，不掩盖
     return {
       success: true,
       data: {
-        title: title || '未知岗位',
-        company: company || '未知公司',
-        salary: salary || '面议',
-        location: location || '未知',
+        title: title || '',
+        company: company || '',
+        salary: salary || '',
+        location: location || '',
         jdContent,
+        // 额外信息（Boss直聘特有）
+        experience: experience || undefined,
+        education: education || undefined,
         rawHtml: options?.debug ? html : undefined,
       },
       meta: {

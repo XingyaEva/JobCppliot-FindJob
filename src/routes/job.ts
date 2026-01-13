@@ -536,20 +536,62 @@ jobRoutes.post('/parse-url', async (c) => {
       }, 500);
     }
 
-    // 创建完整的岗位记录
+    // 记录爬取到的原始信息（用于诊断）
+    const scrapeInfo = {
+      title: scrapeResult.data.title || null,
+      company: scrapeResult.data.company || null,
+      salary: scrapeResult.data.salary || null,
+      location: scrapeResult.data.location || null,
+      experience: scrapeResult.data.experience || null,  // 经验要求
+      education: scrapeResult.data.education || null,    // 学历要求
+      jdContentLength: scrapeResult.data.jdContent?.length || 0,
+      // debug 模式下返回原始 HTML
+      rawHtml: debug ? scrapeResult.data.rawHtml : undefined,
+    };
+    
+    // 收集缺失的字段
+    const missingFields: string[] = [];
+    
+    // 确定最终信息：优先使用爬取结果（更准确），其次使用 AI 解析结果
+    // 注意：爬取结果从 meta 标签获取，更可靠
+    const finalTitle = scrapeResult.data.title || result.structuredJD?.title || '';
+    const finalCompany = scrapeResult.data.company || result.structuredJD?.company || '';
+    const finalSalary = scrapeResult.data.salary || result.structuredJD?.salary || '';
+    const finalLocation = scrapeResult.data.location || result.structuredJD?.location || '';
+    const finalExperience = scrapeResult.data.experience || '';
+    const finalEducation = scrapeResult.data.education || '';
+    
+    if (!finalTitle) missingFields.push('岗位名称');
+    if (!finalCompany) missingFields.push('公司名称');
+    if (!finalSalary) missingFields.push('薪资');
+    if (!finalLocation) missingFields.push('工作地点');
+
+    // 创建完整的岗位记录 - 不使用假数据，空就是空
     const job: Job = {
       id: jobId,
-      title: result.structuredJD?.title || scrapeResult.data.title || '未知岗位',
-      company: result.structuredJD?.company || scrapeResult.data.company || '未知公司',
-      job_url: url,  // 保存原始 URL
+      title: finalTitle || '[未获取到岗位名称]',  // 明确标记未获取
+      company: finalCompany || '[未获取到公司名称]',
+      job_url: url,
       raw_content: result.cleanedText || scrapeResult.data.jdContent,
       source_type: 'url',
       structured_jd: result.structuredJD ? {
         ...result.structuredJD,
-        // 补充爬取到的信息
-        salary: result.structuredJD.salary || scrapeResult.data.salary || undefined,
-        location: result.structuredJD.location || scrapeResult.data.location || undefined,
-      } : undefined,
+        // 用爬取到的真实数据覆盖 AI 解析的数据
+        title: finalTitle || undefined,
+        company: finalCompany || undefined,
+        salary: finalSalary || undefined,
+        location: finalLocation || undefined,
+        experience: finalExperience || undefined,
+        education: finalEducation || undefined,
+      } : {
+        // 即使 AI 解析失败，也保存爬取到的基本信息
+        title: finalTitle || undefined,
+        company: finalCompany || undefined,
+        salary: finalSalary || undefined,
+        location: finalLocation || undefined,
+        experience: finalExperience || undefined,
+        education: finalEducation || undefined,
+      },
       a_analysis: result.aAnalysis,
       b_analysis: result.bAnalysis,
       status: 'completed',
@@ -558,6 +600,9 @@ jobRoutes.post('/parse-url', async (c) => {
     };
 
     console.log(`[API] URL解析完成，ID: ${jobId}, 标题: ${job.title}, 公司: ${job.company}`);
+    if (missingFields.length > 0) {
+      console.warn(`[API] 警告：以下字段未能从URL爬取: ${missingFields.join(', ')}`);
+    }
 
     return c.json({
       success: true,
@@ -565,6 +610,13 @@ jobRoutes.post('/parse-url', async (c) => {
       dagState: dagStates.get(jobId),
       metrics: result.metrics,
       scrapeMeta: scrapeResult.meta,
+      // 新增：爬取诊断信息
+      scrapeInfo,
+      // 新增：缺失字段警告
+      warnings: missingFields.length > 0 ? {
+        missingFields,
+        message: `以下信息未能从URL自动获取: ${missingFields.join('、')}。建议使用截图方式补充完整信息。`,
+      } : undefined,
     });
   } catch (error) {
     console.error('[API] URL解析异常:', error);
