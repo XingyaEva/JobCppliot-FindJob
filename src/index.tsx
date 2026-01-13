@@ -284,6 +284,24 @@ app.get('/job/new', (c) => {
             ></textarea>
           </div>
 
+          {/* 岗位链接输入 */}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">
+              <i class="fas fa-link mr-1 text-gray-400"></i>
+              岗位链接（选填）
+            </label>
+            <input 
+              type="url"
+              id="job-url"
+              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:border-gray-400 focus:outline-none"
+              placeholder="https://www.zhipin.com/job/xxx 或其他招聘网站链接"
+            />
+            <p id="url-hint" class="text-xs text-gray-400 mt-1">
+              <i class="fas fa-lightbulb mr-1"></i>
+              填写岗位原始链接，方便后续查看原帖
+            </p>
+          </div>
+
           {/* 提交按钮 */}
           <div class="flex justify-center">
             <button 
@@ -454,12 +472,52 @@ app.get('/job/new', (c) => {
               }
             });
 
+            // 岗位链接输入框
+            const jobUrlInput = document.getElementById('job-url');
+            const urlHint = document.getElementById('url-hint');
+            
+            // URL 校验函数
+            function validateJobUrl(url) {
+              if (!url || url.trim() === '') {
+                return { valid: true };
+              }
+              try {
+                const parsed = new URL(url);
+                if (!['http:', 'https:'].includes(parsed.protocol)) {
+                  return { valid: false, warning: '链接必须以 http:// 或 https:// 开头' };
+                }
+                return { valid: true };
+              } catch {
+                return { valid: false, warning: '请输入有效的链接格式' };
+              }
+            }
+            
+            // URL 输入时实时校验
+            jobUrlInput.addEventListener('input', function() {
+              const result = validateJobUrl(jobUrlInput.value);
+              if (!result.valid) {
+                urlHint.innerHTML = '<i class="fas fa-exclamation-triangle mr-1 text-yellow-500"></i>' + result.warning;
+                urlHint.className = 'text-xs text-yellow-600 mt-1';
+              } else {
+                urlHint.innerHTML = '<i class="fas fa-lightbulb mr-1"></i>填写岗位原始链接，方便后续查看原帖';
+                urlHint.className = 'text-xs text-gray-400 mt-1';
+              }
+            });
+
             // 解析按钮点击
             parseBtn.addEventListener('click', async function() {
               const text = textInput.value.trim();
+              const jobUrl = jobUrlInput.value.trim();
               
               if (!text && !imageDataUrl) {
                 alert('请上传JD截图或粘贴JD文本');
+                return;
+              }
+              
+              // 校验 URL（可选字段，但格式必须正确）
+              const urlValidation = validateJobUrl(jobUrl);
+              if (!urlValidation.valid) {
+                alert(urlValidation.warning);
                 return;
               }
 
@@ -486,6 +544,7 @@ app.get('/job/new', (c) => {
                     type: imageDataUrl ? 'image' : 'text',
                     content: text || undefined,
                     imageUrl: imageDataUrl || undefined,
+                    jobUrl: jobUrl || undefined,
                   }),
                 });
 
@@ -594,10 +653,46 @@ app.get('/job/:id', (c) => {
           {/* 基本信息 */}
           <div class="bg-gray-50 rounded-xl p-6">
             <h2 id="job-title" class="text-2xl font-bold mb-2">岗位名称</h2>
-            <p id="job-company" class="text-gray-600 mb-4">
+            <p id="job-company" class="text-gray-600 mb-2">
               <i class="fas fa-building mr-2"></i>
               <span>公司名称</span>
             </p>
+            {/* 岗位链接 */}
+            <div id="job-url-section" class="mb-4 hidden">
+              <div class="flex items-center gap-2 flex-wrap">
+                <span class="text-sm text-gray-500">
+                  <i class="fas fa-link mr-1"></i>原帖链接：
+                </span>
+                <a id="job-url-link" href="#" target="_blank" rel="noopener noreferrer" 
+                   class="text-sm text-blue-500 hover:text-blue-600 hover:underline truncate max-w-xs">
+                </a>
+                <button id="edit-url-btn" class="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 border border-gray-200 rounded hover:bg-gray-100">
+                  <i class="fas fa-edit mr-1"></i>编辑
+                </button>
+              </div>
+            </div>
+            {/* 无链接时显示添加按钮 */}
+            <div id="add-url-section" class="mb-4 hidden">
+              <button id="add-url-btn" class="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1">
+                <i class="fas fa-plus-circle"></i>
+                <span>添加岗位链接</span>
+              </button>
+            </div>
+            {/* 编辑链接表单 */}
+            <div id="url-edit-form" class="mb-4 hidden">
+              <div class="flex items-center gap-2">
+                <input type="url" id="url-input" 
+                       class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-blue-400 focus:outline-none"
+                       placeholder="https://www.zhipin.com/job/xxx" />
+                <button id="save-url-btn" class="px-3 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                  保存
+                </button>
+                <button id="cancel-url-btn" class="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">
+                  取消
+                </button>
+              </div>
+              <p id="url-edit-hint" class="text-xs text-gray-400 mt-1"></p>
+            </div>
             <div class="flex flex-wrap gap-4 text-sm text-gray-500">
               <span id="job-location"><i class="fas fa-map-marker-alt mr-1"></i>地点</span>
               <span id="job-salary"><i class="fas fa-yen-sign mr-1"></i>薪资</span>
@@ -680,6 +775,124 @@ app.get('/job/:id', (c) => {
             document.getElementById('job-company').querySelector('span').textContent = job.company;
             document.getElementById('job-location').innerHTML = '<i class="fas fa-map-marker-alt mr-1"></i>' + (job.structured_jd?.location || '未知');
             document.getElementById('job-salary').innerHTML = '<i class="fas fa-yen-sign mr-1"></i>' + (job.structured_jd?.salary || '面议');
+
+            // 岗位链接相关元素
+            const jobUrlSection = document.getElementById('job-url-section');
+            const addUrlSection = document.getElementById('add-url-section');
+            const urlEditForm = document.getElementById('url-edit-form');
+            const jobUrlLink = document.getElementById('job-url-link');
+            const urlInput = document.getElementById('url-input');
+            const urlEditHint = document.getElementById('url-edit-hint');
+            
+            // 截断 URL 显示
+            function truncateUrl(url, maxLen) {
+              try {
+                const parsed = new URL(url);
+                let display = parsed.hostname + parsed.pathname;
+                if (display.length > maxLen) {
+                  display = display.substring(0, maxLen - 3) + '...';
+                }
+                return display;
+              } catch {
+                return url.length > maxLen ? url.substring(0, maxLen - 3) + '...' : url;
+              }
+            }
+            
+            // 渲染链接状态
+            function renderJobUrl() {
+              if (job.job_url) {
+                jobUrlLink.href = job.job_url;
+                jobUrlLink.textContent = truncateUrl(job.job_url, 40);
+                jobUrlLink.title = job.job_url;
+                jobUrlSection.classList.remove('hidden');
+                addUrlSection.classList.add('hidden');
+              } else {
+                jobUrlSection.classList.add('hidden');
+                addUrlSection.classList.remove('hidden');
+              }
+              urlEditForm.classList.add('hidden');
+            }
+            renderJobUrl();
+            
+            // 添加链接按钮
+            document.getElementById('add-url-btn').addEventListener('click', function() {
+              urlInput.value = '';
+              addUrlSection.classList.add('hidden');
+              urlEditForm.classList.remove('hidden');
+              urlInput.focus();
+            });
+            
+            // 编辑链接按钮
+            document.getElementById('edit-url-btn').addEventListener('click', function() {
+              urlInput.value = job.job_url || '';
+              jobUrlSection.classList.add('hidden');
+              urlEditForm.classList.remove('hidden');
+              urlInput.focus();
+            });
+            
+            // 取消编辑
+            document.getElementById('cancel-url-btn').addEventListener('click', function() {
+              renderJobUrl();
+            });
+            
+            // URL 校验
+            function validateUrl(url) {
+              if (!url || url.trim() === '') return { valid: true };
+              try {
+                const parsed = new URL(url);
+                if (!['http:', 'https:'].includes(parsed.protocol)) {
+                  return { valid: false, warning: '链接必须以 http:// 或 https:// 开头' };
+                }
+                return { valid: true };
+              } catch {
+                return { valid: false, warning: '请输入有效的链接格式' };
+              }
+            }
+            
+            // URL 输入校验
+            urlInput.addEventListener('input', function() {
+              const result = validateUrl(urlInput.value);
+              urlEditHint.textContent = result.valid ? '' : result.warning;
+              urlEditHint.className = result.valid ? 'text-xs text-gray-400 mt-1' : 'text-xs text-red-500 mt-1';
+            });
+            
+            // 保存链接
+            document.getElementById('save-url-btn').addEventListener('click', function() {
+              const newUrl = urlInput.value.trim();
+              const validation = validateUrl(newUrl);
+              if (!validation.valid) {
+                urlEditHint.textContent = validation.warning;
+                urlEditHint.className = 'text-xs text-red-500 mt-1';
+                return;
+              }
+              
+              // 更新 job 数据
+              job.job_url = newUrl || undefined;
+              job.updated_at = new Date().toISOString();
+              
+              // 保存到 localStorage
+              const jobIndex = jobs.findIndex(j => j.id === jobId);
+              if (jobIndex !== -1) {
+                jobs[jobIndex] = job;
+                localStorage.setItem('jobcopilot_jobs', JSON.stringify(jobs));
+              }
+              
+              // 显示成功提示
+              if (window.JobCopilot && window.JobCopilot.showToast) {
+                window.JobCopilot.showToast(newUrl ? '链接已保存' : '链接已删除', 'success');
+              }
+              
+              renderJobUrl();
+            });
+            
+            // 点击链接时确认跳转
+            jobUrlLink.addEventListener('click', function(e) {
+              e.preventDefault();
+              const url = this.href;
+              if (confirm('即将跳转到外部网站查看「' + job.title + '」原帖\\n\\n' + url + '\\n\\n是否继续？')) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+              }
+            });
 
             // 渲染A维度
             renderAAnalysis(job.a_analysis);
@@ -930,8 +1143,37 @@ app.get('/jobs', (c) => {
               return;
             }
             
+            // 截断 URL 显示
+            function truncateUrl(url, maxLen) {
+              if (!url) return '';
+              try {
+                var parsed = new URL(url);
+                var display = parsed.hostname + parsed.pathname;
+                if (display.length > maxLen) {
+                  display = display.substring(0, maxLen - 3) + '...';
+                }
+                return display;
+              } catch {
+                return url.length > maxLen ? url.substring(0, maxLen - 3) + '...' : url;
+              }
+            }
+            
+            // 打开外部链接（带确认）
+            window.openJobUrl = function(url, title) {
+              if (confirm('即将跳转到外部网站查看「' + title + '」原帖\\n\\n' + url + '\\n\\n是否继续？')) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+              }
+            };
+            
             jobsList.innerHTML = jobs.map(function(job) {
               var statusColor = job.status === 'completed' ? 'green' : (job.status === 'error' ? 'red' : 'yellow');
+              var urlDisplay = job.job_url ? truncateUrl(job.job_url, 30) : '';
+              var urlButton = job.job_url ? 
+                '<button onclick="event.stopPropagation();openJobUrl(\\'' + job.job_url.replace(/'/g, "\\\\'") + '\\', \\'' + job.title.replace(/'/g, "\\\\'") + '\\')" ' +
+                'class="text-xs text-gray-500 hover:text-blue-600 flex items-center gap-1 truncate max-w-[180px]" title="' + job.job_url + '">' +
+                '<i class="fas fa-external-link-alt"></i>' +
+                '<span class="truncate">' + urlDisplay + '</span></button>' : '';
+              
               return '<div class="p-4 border border-gray-200 rounded-xl hover:shadow-md transition-shadow card-hover">' +
                 '<div class="flex items-start justify-between mb-2">' +
                 '<a href="/job/' + job.id + '" class="font-semibold text-gray-900 hover:text-blue-600 flex-1">' + job.title + '</a>' +
@@ -940,7 +1182,8 @@ app.get('/jobs', (c) => {
                 '<button onclick="event.stopPropagation();JobCopilot.deleteJob(\\'' + job.id + '\\')" class="text-gray-400 hover:text-red-500 p-1" title="删除">' +
                 '<i class="fas fa-trash-alt text-xs"></i></button>' +
                 '</div></div>' +
-                '<p class="text-sm text-gray-500 mb-3"><i class="fas fa-building mr-1"></i>' + job.company + '</p>' +
+                '<p class="text-sm text-gray-500 mb-2"><i class="fas fa-building mr-1"></i>' + job.company + '</p>' +
+                (urlButton ? '<div class="mb-2">' + urlButton + '</div>' : '') +
                 '<div class="flex flex-wrap gap-2 mb-3">' +
                 (job.a_analysis?.A2_product_type?.type ? '<span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">' + job.a_analysis.A2_product_type.type + '</span>' : '') +
                 (job.a_analysis?.A3_business_domain?.primary ? '<span class="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded-full">' + job.a_analysis.A3_business_domain.primary + '</span>' : '') +

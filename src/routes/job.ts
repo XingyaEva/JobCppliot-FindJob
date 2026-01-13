@@ -220,12 +220,35 @@ jobRoutes.post('/parse', async (c) => {
 });
 
 /**
+ * 校验 URL 格式
+ */
+function validateJobUrl(url: string | undefined): { valid: boolean; error?: string } {
+  if (!url || url.trim() === '') {
+    return { valid: true }; // 空值有效（选填字段）
+  }
+  
+  try {
+    const parsed = new URL(url);
+    if (!['http:', 'https:'].includes(parsed.protocol)) {
+      return { valid: false, error: '链接必须以 http:// 或 https:// 开头' };
+    }
+    // 基本长度限制
+    if (url.length > 2048) {
+      return { valid: false, error: '链接长度不能超过2048字符' };
+    }
+    return { valid: true };
+  } catch {
+    return { valid: false, error: '请输入有效的链接格式' };
+  }
+}
+
+/**
  * POST /api/job/parse-sync - 同步解析JD（等待完成）
  */
 jobRoutes.post('/parse-sync', async (c) => {
   try {
     const body = await c.req.json();
-    const { type, content, imageUrl } = body;
+    const { type, content, imageUrl, jobUrl } = body;
 
     // 验证输入
     if (!type || (type !== 'text' && type !== 'image')) {
@@ -240,8 +263,14 @@ jobRoutes.post('/parse-sync', async (c) => {
       return c.json({ success: false, error: '图片模式需要提供imageUrl' }, 400);
     }
 
+    // 校验岗位链接
+    const urlValidation = validateJobUrl(jobUrl);
+    if (!urlValidation.valid) {
+      return c.json({ success: false, error: urlValidation.error }, 400);
+    }
+
     const jobId = generateId();
-    console.log(`[API] 同步解析JD，ID: ${jobId}, 类型: ${type}`);
+    console.log(`[API] 同步解析JD，ID: ${jobId}, 类型: ${type}, 链接: ${jobUrl || '无'}`);
 
     // 执行DAG（同步等待）
     const result = await runJDParseDAG(
@@ -258,6 +287,7 @@ jobRoutes.post('/parse-sync', async (c) => {
       id: jobId,
       title: result.structuredJD?.title || '未知岗位',
       company: result.structuredJD?.company || '未知公司',
+      job_url: jobUrl?.trim() || undefined,  // 新增：岗位链接
       raw_content: result.cleanedText || content || '',
       source_type: type,
       image_url: imageUrl,
@@ -334,6 +364,50 @@ jobRoutes.get('/', async (c) => {
     jobs,
     total: jobs.length,
   });
+});
+
+/**
+ * PUT /api/job/:id - 更新岗位信息（目前支持更新链接）
+ */
+jobRoutes.put('/:id', async (c) => {
+  const jobId = c.req.param('id');
+  
+  try {
+    const body = await c.req.json();
+    const { job_url } = body;
+    
+    // 校验岗位链接
+    const urlValidation = validateJobUrl(job_url);
+    if (!urlValidation.valid) {
+      return c.json({ success: false, error: urlValidation.error }, 400);
+    }
+    
+    // 从内存中查找岗位
+    const job = jobStorage.getById(jobId);
+    if (!job) {
+      return c.json({ success: false, error: '未找到岗位' }, 404);
+    }
+    
+    // 更新岗位链接
+    job.job_url = job_url?.trim() || undefined;
+    job.updated_at = now();
+    
+    // 保存更新
+    jobStorage.update(jobId, job);
+    
+    console.log(`[API] 岗位链接已更新，ID: ${jobId}, 链接: ${job.job_url || '无'}`);
+    
+    return c.json({
+      success: true,
+      job,
+    });
+  } catch (error) {
+    console.error('[API] 更新岗位失败:', error);
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '未知错误' 
+    }, 500);
+  }
 });
 
 /**

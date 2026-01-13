@@ -77,6 +77,7 @@ export interface Job {
   id: string;
   title: string;
   company: string;
+  job_url?: string;           // 岗位原始链接（选填）
   raw_content: string;
   source_type: 'image' | 'text';
   image_url?: string;
