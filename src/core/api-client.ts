@@ -5,7 +5,7 @@
 // API 配置
 const API_CONFIG = {
   baseUrl: 'https://api.vectorengine.ai',
-  apiKey: 'sk-JtQ4dB1Z7LMFLVHfIuvPdxq4DW6PriPvbbilDZHWfjlwHs8K',
+  apiKey: 'sk-3LLX8OkNZqTFKwCqxEXnMjMfgJmNEopXTn5tWP99f8l6t533',
   defaultModel: 'gpt-4o',
   timeout: 120000, // 2分钟超时
 };
