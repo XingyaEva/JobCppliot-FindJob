@@ -631,111 +631,222 @@ app.get('/job/:id', (c) => {
   const jobId = c.req.param('id');
   
   return c.render(
-    <div class="min-h-screen bg-white">
-      <header class="border-b border-gray-100">
-        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center">
-          <a href="/jobs" class="text-gray-500 hover:text-gray-700 mr-4">
-            <i class="fas fa-arrow-left"></i>
-          </a>
-          <h1 id="page-title" class="text-xl font-bold">岗位详情</h1>
+    <div class="min-h-screen bg-gray-50">
+      {/* 顶部导航 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <div class="flex items-center gap-4">
+              <a href="/jobs" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-arrow-left"></i>
+              </a>
+              <h1 id="page-title" class="text-lg font-bold truncate max-w-md">岗位详情</h1>
+            </div>
+            <div class="flex items-center gap-2">
+              <a id="action-match" href="#" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                <i class="fas fa-chart-pie mr-1"></i>匹配分析
+              </a>
+              <a id="action-interview" href="#" class="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600">
+                <i class="fas fa-comments mr-1"></i>面试准备
+              </a>
+              <a id="action-optimize" href="#" class="px-3 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600">
+                <i class="fas fa-magic mr-1"></i>简历优化
+              </a>
+            </div>
+          </div>
         </div>
       </header>
       
-      <main class="max-w-4xl mx-auto px-4 py-8">
+      <main class="max-w-7xl mx-auto px-4 py-6">
         {/* 加载状态 */}
         <div id="loading" class="text-center py-12">
           <i class="fas fa-spinner loading-spinner text-3xl text-gray-400 mb-4"></i>
           <p class="text-gray-500">加载中...</p>
         </div>
 
-        {/* 岗位详情内容 */}
-        <div id="job-content" class="hidden space-y-8">
+        {/* ==================== PC端三栏布局 ==================== */}
+        <div id="job-content-desktop" class="hidden lg:grid lg:grid-cols-12 gap-6">
+          
+          {/* 左栏 - JD原图/原文本 + 链接 (占3列, ~25%) */}
+          <aside class="lg:col-span-3">
+            <div class="sticky top-20 space-y-4">
+              {/* 原图/原文本区域 */}
+              <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                  <h3 class="font-semibold text-sm text-gray-700">
+                    <i class="fas fa-file-alt mr-2 text-gray-400"></i>
+                    <span id="left-panel-title">岗位JD原图</span>
+                  </h3>
+                </div>
+                <div id="left-panel-content" class="p-4">
+                  {/* 图片或文本将通过JS渲染 */}
+                  <div class="text-center text-gray-400 py-8">
+                    <i class="fas fa-image text-3xl mb-2"></i>
+                    <p class="text-sm">加载中...</p>
+                  </div>
+                </div>
+              </div>
+              
+              {/* 岗位链接区域 */}
+              <div id="left-url-section" class="bg-white rounded-xl border border-gray-200 p-4 hidden">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">
+                  <i class="fas fa-link mr-2 text-blue-500"></i>原帖链接
+                </h4>
+                <a id="left-url-link" href="#" target="_blank" rel="noopener noreferrer" 
+                   class="block text-sm text-blue-500 hover:text-blue-600 hover:underline break-all mb-2">
+                </a>
+                <button id="left-url-open" class="w-full px-3 py-2 text-sm bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors">
+                  <i class="fas fa-external-link-alt mr-1"></i>查看原帖
+                </button>
+              </div>
+              
+              {/* 添加/编辑链接 */}
+              <div id="left-add-url" class="bg-white rounded-xl border border-gray-200 p-4 hidden">
+                <button id="left-add-url-btn" class="w-full px-3 py-2 text-sm text-gray-500 border border-dashed border-gray-300 rounded-lg hover:border-blue-400 hover:text-blue-500 transition-colors">
+                  <i class="fas fa-plus mr-1"></i>添加岗位链接
+                </button>
+              </div>
+              
+              {/* 编辑链接表单 */}
+              <div id="left-url-edit-form" class="bg-white rounded-xl border border-gray-200 p-4 hidden">
+                <h4 class="text-sm font-medium text-gray-700 mb-3">编辑岗位链接</h4>
+                <input type="url" id="left-url-input" 
+                       class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-blue-400 focus:outline-none mb-2"
+                       placeholder="https://www.zhipin.com/job/xxx" />
+                <p id="left-url-hint" class="text-xs text-gray-400 mb-3"></p>
+                <div class="flex gap-2">
+                  <button id="left-url-save" class="flex-1 px-3 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">
+                    保存
+                  </button>
+                  <button id="left-url-cancel" class="flex-1 px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">
+                    取消
+                  </button>
+                </div>
+              </div>
+            </div>
+          </aside>
+
+          {/* 中间栏 - 结构化分析结果 (占5列, ~42%) */}
+          <main class="lg:col-span-5">
+            {/* 基本信息卡片 */}
+            <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+              <h2 id="job-title-desktop" class="text-xl font-bold text-gray-900 mb-2">岗位名称</h2>
+              <p id="job-company-desktop" class="text-gray-600 mb-3">
+                <i class="fas fa-building mr-2 text-gray-400"></i>
+                <span>公司名称</span>
+              </p>
+              <div class="flex flex-wrap gap-3 text-sm">
+                <span id="job-location-desktop" class="px-3 py-1 bg-gray-100 rounded-full text-gray-600">
+                  <i class="fas fa-map-marker-alt mr-1"></i>地点
+                </span>
+                <span id="job-salary-desktop" class="px-3 py-1 bg-green-100 text-green-700 rounded-full">
+                  <i class="fas fa-yen-sign mr-1"></i>薪资
+                </span>
+              </div>
+            </div>
+
+            {/* A维度分析 */}
+            <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+              <h3 class="text-lg font-semibold mb-4 flex items-center">
+                <span class="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mr-3 text-sm font-bold">A</span>
+                岗位速览
+              </h3>
+              <div id="a-analysis-desktop" class="grid grid-cols-2 gap-3">
+                {/* A维度内容将通过JS动态渲染 */}
+              </div>
+            </div>
+
+            {/* B维度分析 */}
+            <div class="bg-white rounded-xl border border-gray-200 p-6">
+              <h3 class="text-lg font-semibold mb-4 flex items-center">
+                <span class="w-8 h-8 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mr-3 text-sm font-bold">B</span>
+                岗位深度拆解
+              </h3>
+              <div id="b-analysis-desktop" class="space-y-3">
+                {/* B维度内容将通过JS动态渲染 */}
+              </div>
+            </div>
+          </main>
+
+          {/* 右栏 - 解析出来的文字 (占4列, ~33%) */}
+          <aside class="lg:col-span-4">
+            <div class="sticky top-20">
+              <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div class="px-4 py-3 bg-gray-50 border-b border-gray-200 flex items-center justify-between">
+                  <h3 class="font-semibold text-sm text-gray-700">
+                    <i class="fas fa-file-lines mr-2 text-gray-400"></i>
+                    解析出来的文字
+                  </h3>
+                  <button id="copy-text-btn" class="text-xs text-gray-500 hover:text-blue-500 px-2 py-1 rounded hover:bg-gray-100">
+                    <i class="fas fa-copy mr-1"></i>复制
+                  </button>
+                </div>
+                <div id="right-panel-content" class="p-4 max-h-[calc(100vh-140px)] overflow-y-auto">
+                  <pre id="parsed-text" class="whitespace-pre-wrap text-sm text-gray-700 leading-relaxed"></pre>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+
+        {/* ==================== 移动端单栏布局 ==================== */}
+        <div id="job-content-mobile" class="hidden lg:hidden space-y-6">
           {/* 基本信息 */}
-          <div class="bg-gray-50 rounded-xl p-6">
-            <h2 id="job-title" class="text-2xl font-bold mb-2">岗位名称</h2>
-            <p id="job-company" class="text-gray-600 mb-2">
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
+            <h2 id="job-title-mobile" class="text-xl font-bold mb-2">岗位名称</h2>
+            <p id="job-company-mobile" class="text-gray-600 mb-3">
               <i class="fas fa-building mr-2"></i>
               <span>公司名称</span>
             </p>
+            <div class="flex flex-wrap gap-2 text-sm mb-4">
+              <span id="job-location-mobile" class="px-3 py-1 bg-gray-100 rounded-full text-gray-600">
+                <i class="fas fa-map-marker-alt mr-1"></i>地点
+              </span>
+              <span id="job-salary-mobile" class="px-3 py-1 bg-green-100 text-green-700 rounded-full">
+                <i class="fas fa-yen-sign mr-1"></i>薪资
+              </span>
+            </div>
             {/* 岗位链接 */}
-            <div id="job-url-section" class="mb-4 hidden">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-sm text-gray-500">
-                  <i class="fas fa-link mr-1"></i>原帖链接：
-                </span>
-                <a id="job-url-link" href="#" target="_blank" rel="noopener noreferrer" 
-                   class="text-sm text-blue-500 hover:text-blue-600 hover:underline truncate max-w-xs">
-                </a>
-                <button id="edit-url-btn" class="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 border border-gray-200 rounded hover:bg-gray-100">
-                  <i class="fas fa-edit mr-1"></i>编辑
-                </button>
-              </div>
-            </div>
-            {/* 无链接时显示添加按钮 */}
-            <div id="add-url-section" class="mb-4 hidden">
-              <button id="add-url-btn" class="text-sm text-gray-500 hover:text-blue-600 flex items-center gap-1">
-                <i class="fas fa-plus-circle"></i>
-                <span>添加岗位链接</span>
-              </button>
-            </div>
-            {/* 编辑链接表单 */}
-            <div id="url-edit-form" class="mb-4 hidden">
-              <div class="flex items-center gap-2">
-                <input type="url" id="url-input" 
-                       class="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-blue-400 focus:outline-none"
-                       placeholder="https://www.zhipin.com/job/xxx" />
-                <button id="save-url-btn" class="px-3 py-2 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">
-                  保存
-                </button>
-                <button id="cancel-url-btn" class="px-3 py-2 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50">
-                  取消
-                </button>
-              </div>
-              <p id="url-edit-hint" class="text-xs text-gray-400 mt-1"></p>
-            </div>
-            <div class="flex flex-wrap gap-4 text-sm text-gray-500">
-              <span id="job-location"><i class="fas fa-map-marker-alt mr-1"></i>地点</span>
-              <span id="job-salary"><i class="fas fa-yen-sign mr-1"></i>薪资</span>
+            <div id="mobile-url-section" class="hidden border-t border-gray-100 pt-3 mt-3">
+              <a id="mobile-url-link" href="#" target="_blank" rel="noopener noreferrer" 
+                 class="text-sm text-blue-500 hover:text-blue-600 flex items-center gap-1">
+                <i class="fas fa-external-link-alt"></i>
+                <span>查看原帖</span>
+              </a>
             </div>
           </div>
 
           {/* A维度分析 */}
-          <div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
             <h3 class="text-lg font-semibold mb-4 flex items-center">
               <span class="w-8 h-8 bg-blue-100 text-blue-600 rounded-lg flex items-center justify-center mr-3 text-sm font-bold">A</span>
               岗位速览
             </h3>
-            <div id="a-analysis" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* A维度内容将通过JS动态渲染 */}
+            <div id="a-analysis-mobile" class="grid grid-cols-1 gap-3">
             </div>
           </div>
 
           {/* B维度分析 */}
-          <div>
+          <div class="bg-white rounded-xl border border-gray-200 p-5">
             <h3 class="text-lg font-semibold mb-4 flex items-center">
               <span class="w-8 h-8 bg-purple-100 text-purple-600 rounded-lg flex items-center justify-center mr-3 text-sm font-bold">B</span>
               岗位深度拆解
             </h3>
-            <div id="b-analysis" class="space-y-4">
-              {/* B维度内容将通过JS动态渲染 */}
+            <div id="b-analysis-mobile" class="space-y-3">
             </div>
           </div>
 
-          {/* 操作按钮 */}
-          <div class="flex flex-wrap gap-4 pt-4 border-t border-gray-100">
-            <a href="/resume" class="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors">
-              <i class="fas fa-file-alt mr-2"></i>上传简历进行匹配
-            </a>
-            <button id="show-raw-btn" class="px-6 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
-              <i class="fas fa-file-lines mr-2"></i>查看原始JD
-            </button>
-          </div>
-
           {/* 原始JD（折叠） */}
-          <div id="raw-jd-section" class="hidden">
-            <div class="bg-gray-50 rounded-xl p-6">
-              <h4 class="font-semibold mb-3">原始JD内容</h4>
-              <pre id="raw-jd" class="whitespace-pre-wrap text-sm text-gray-600"></pre>
+          <div class="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <button id="toggle-raw-mobile" class="w-full px-5 py-4 flex items-center justify-between text-left hover:bg-gray-50">
+              <span class="font-semibold text-gray-700">
+                <i class="fas fa-file-lines mr-2 text-gray-400"></i>
+                查看原始JD
+              </span>
+              <i class="fas fa-chevron-down text-gray-400 toggle-icon-mobile"></i>
+            </button>
+            <div id="raw-jd-mobile" class="hidden px-5 pb-5 border-t border-gray-100">
+              <pre class="whitespace-pre-wrap text-sm text-gray-600 mt-4"></pre>
             </div>
           </div>
         </div>
@@ -754,7 +865,8 @@ app.get('/job/:id', (c) => {
           document.addEventListener('DOMContentLoaded', function() {
             const jobId = '${jobId}';
             const loading = document.getElementById('loading');
-            const content = document.getElementById('job-content');
+            const contentDesktop = document.getElementById('job-content-desktop');
+            const contentMobile = document.getElementById('job-content-mobile');
             const error = document.getElementById('error');
             const errorText = document.getElementById('error-text');
 
@@ -769,71 +881,67 @@ app.get('/job/:id', (c) => {
               return;
             }
 
-            // 渲染基本信息
-            document.getElementById('page-title').textContent = job.title + ' @ ' + job.company;
-            document.getElementById('job-title').textContent = job.title;
-            document.getElementById('job-company').querySelector('span').textContent = job.company;
-            document.getElementById('job-location').innerHTML = '<i class="fas fa-map-marker-alt mr-1"></i>' + (job.structured_jd?.location || '未知');
-            document.getElementById('job-salary').innerHTML = '<i class="fas fa-yen-sign mr-1"></i>' + (job.structured_jd?.salary || '面议');
+            // 设置操作按钮链接
+            document.getElementById('action-match').href = '/job/' + jobId + '/match';
+            document.getElementById('action-interview').href = '/job/' + jobId + '/interview';
+            document.getElementById('action-optimize').href = '/job/' + jobId + '/optimize';
 
-            // 岗位链接相关元素
-            const jobUrlSection = document.getElementById('job-url-section');
-            const addUrlSection = document.getElementById('add-url-section');
-            const urlEditForm = document.getElementById('url-edit-form');
-            const jobUrlLink = document.getElementById('job-url-link');
-            const urlInput = document.getElementById('url-input');
-            const urlEditHint = document.getElementById('url-edit-hint');
+            // 渲染页面标题
+            document.getElementById('page-title').textContent = job.title + ' @ ' + job.company;
+
+            // ==================== 渲染基本信息 ====================
+            // Desktop
+            document.getElementById('job-title-desktop').textContent = job.title;
+            document.getElementById('job-company-desktop').querySelector('span').textContent = job.company;
+            document.getElementById('job-location-desktop').innerHTML = '<i class="fas fa-map-marker-alt mr-1"></i>' + (job.structured_jd?.location || '未知');
+            document.getElementById('job-salary-desktop').innerHTML = '<i class="fas fa-yen-sign mr-1"></i>' + (job.structured_jd?.salary || '面议');
             
-            // 截断 URL 显示
-            function truncateUrl(url, maxLen) {
-              try {
-                const parsed = new URL(url);
-                let display = parsed.hostname + parsed.pathname;
-                if (display.length > maxLen) {
-                  display = display.substring(0, maxLen - 3) + '...';
-                }
-                return display;
-              } catch {
-                return url.length > maxLen ? url.substring(0, maxLen - 3) + '...' : url;
-              }
+            // Mobile
+            document.getElementById('job-title-mobile').textContent = job.title;
+            document.getElementById('job-company-mobile').querySelector('span').textContent = job.company;
+            document.getElementById('job-location-mobile').innerHTML = '<i class="fas fa-map-marker-alt mr-1"></i>' + (job.structured_jd?.location || '未知');
+            document.getElementById('job-salary-mobile').innerHTML = '<i class="fas fa-yen-sign mr-1"></i>' + (job.structured_jd?.salary || '面议');
+
+            // ==================== 左栏 - 原图/原文本 ====================
+            const leftPanelTitle = document.getElementById('left-panel-title');
+            const leftPanelContent = document.getElementById('left-panel-content');
+            
+            if (job.source_type === 'image' && job.image_url) {
+              leftPanelTitle.textContent = '岗位JD原图';
+              leftPanelContent.innerHTML = '<img src="' + job.image_url + '" class="w-full rounded-lg cursor-pointer hover:opacity-90" onclick="window.open(this.src)" title="点击查看大图" />';
+            } else {
+              leftPanelTitle.textContent = '原始JD文本';
+              const rawText = job.raw_content || '无原始内容';
+              leftPanelContent.innerHTML = '<div class="max-h-80 overflow-y-auto"><pre class="whitespace-pre-wrap text-xs text-gray-600 leading-relaxed">' + escapeHtml(rawText) + '</pre></div>';
             }
+
+            // ==================== 左栏 - 岗位链接 ====================
+            const leftUrlSection = document.getElementById('left-url-section');
+            const leftAddUrl = document.getElementById('left-add-url');
+            const leftUrlEditForm = document.getElementById('left-url-edit-form');
+            const leftUrlLink = document.getElementById('left-url-link');
+            const leftUrlInput = document.getElementById('left-url-input');
+            const leftUrlHint = document.getElementById('left-url-hint');
+            const mobileUrlSection = document.getElementById('mobile-url-section');
+            const mobileUrlLink = document.getElementById('mobile-url-link');
             
-            // 渲染链接状态
-            function renderJobUrl() {
+            function renderUrlSection() {
               if (job.job_url) {
-                jobUrlLink.href = job.job_url;
-                jobUrlLink.textContent = truncateUrl(job.job_url, 40);
-                jobUrlLink.title = job.job_url;
-                jobUrlSection.classList.remove('hidden');
-                addUrlSection.classList.add('hidden');
+                leftUrlLink.textContent = job.job_url;
+                leftUrlLink.href = job.job_url;
+                leftUrlSection.classList.remove('hidden');
+                leftAddUrl.classList.add('hidden');
+                // Mobile
+                mobileUrlSection.classList.remove('hidden');
+                mobileUrlLink.href = job.job_url;
               } else {
-                jobUrlSection.classList.add('hidden');
-                addUrlSection.classList.remove('hidden');
+                leftUrlSection.classList.add('hidden');
+                leftAddUrl.classList.remove('hidden');
+                mobileUrlSection.classList.add('hidden');
               }
-              urlEditForm.classList.add('hidden');
+              leftUrlEditForm.classList.add('hidden');
             }
-            renderJobUrl();
-            
-            // 添加链接按钮
-            document.getElementById('add-url-btn').addEventListener('click', function() {
-              urlInput.value = '';
-              addUrlSection.classList.add('hidden');
-              urlEditForm.classList.remove('hidden');
-              urlInput.focus();
-            });
-            
-            // 编辑链接按钮
-            document.getElementById('edit-url-btn').addEventListener('click', function() {
-              urlInput.value = job.job_url || '';
-              jobUrlSection.classList.add('hidden');
-              urlEditForm.classList.remove('hidden');
-              urlInput.focus();
-            });
-            
-            // 取消编辑
-            document.getElementById('cancel-url-btn').addEventListener('click', function() {
-              renderJobUrl();
-            });
+            renderUrlSection();
             
             // URL 校验
             function validateUrl(url) {
@@ -849,92 +957,194 @@ app.get('/job/:id', (c) => {
               }
             }
             
+            // 添加链接
+            document.getElementById('left-add-url-btn').addEventListener('click', function() {
+              leftUrlInput.value = '';
+              leftAddUrl.classList.add('hidden');
+              leftUrlEditForm.classList.remove('hidden');
+              leftUrlInput.focus();
+            });
+            
+            // 点击链接区域编辑
+            leftUrlSection.addEventListener('click', function(e) {
+              if (e.target.id !== 'left-url-open' && !e.target.closest('#left-url-open')) {
+                leftUrlInput.value = job.job_url || '';
+                leftUrlSection.classList.add('hidden');
+                leftUrlEditForm.classList.remove('hidden');
+                leftUrlInput.focus();
+              }
+            });
+            
+            // 查看原帖按钮
+            document.getElementById('left-url-open').addEventListener('click', function(e) {
+              e.stopPropagation();
+              if (confirm('即将跳转到外部网站查看「' + job.title + '」原帖\\n\\n' + job.job_url + '\\n\\n是否继续？')) {
+                window.open(job.job_url, '_blank', 'noopener,noreferrer');
+              }
+            });
+            
+            // Mobile 链接点击
+            mobileUrlLink.addEventListener('click', function(e) {
+              e.preventDefault();
+              if (confirm('即将跳转到外部网站查看「' + job.title + '」原帖\\n\\n' + job.job_url + '\\n\\n是否继续？')) {
+                window.open(job.job_url, '_blank', 'noopener,noreferrer');
+              }
+            });
+            
             // URL 输入校验
-            urlInput.addEventListener('input', function() {
-              const result = validateUrl(urlInput.value);
-              urlEditHint.textContent = result.valid ? '' : result.warning;
-              urlEditHint.className = result.valid ? 'text-xs text-gray-400 mt-1' : 'text-xs text-red-500 mt-1';
+            leftUrlInput.addEventListener('input', function() {
+              const result = validateUrl(leftUrlInput.value);
+              leftUrlHint.textContent = result.valid ? '' : result.warning;
+              leftUrlHint.className = result.valid ? 'text-xs text-gray-400 mb-3' : 'text-xs text-red-500 mb-3';
             });
             
             // 保存链接
-            document.getElementById('save-url-btn').addEventListener('click', function() {
-              const newUrl = urlInput.value.trim();
+            document.getElementById('left-url-save').addEventListener('click', function() {
+              const newUrl = leftUrlInput.value.trim();
               const validation = validateUrl(newUrl);
               if (!validation.valid) {
-                urlEditHint.textContent = validation.warning;
-                urlEditHint.className = 'text-xs text-red-500 mt-1';
+                leftUrlHint.textContent = validation.warning;
+                leftUrlHint.className = 'text-xs text-red-500 mb-3';
                 return;
               }
               
-              // 更新 job 数据
               job.job_url = newUrl || undefined;
               job.updated_at = new Date().toISOString();
               
-              // 保存到 localStorage
               const jobIndex = jobs.findIndex(j => j.id === jobId);
               if (jobIndex !== -1) {
                 jobs[jobIndex] = job;
                 localStorage.setItem('jobcopilot_jobs', JSON.stringify(jobs));
               }
               
-              // 显示成功提示
               if (window.JobCopilot && window.JobCopilot.showToast) {
                 window.JobCopilot.showToast(newUrl ? '链接已保存' : '链接已删除', 'success');
               }
               
-              renderJobUrl();
+              renderUrlSection();
             });
             
-            // 点击链接时确认跳转
-            jobUrlLink.addEventListener('click', function(e) {
-              e.preventDefault();
-              const url = this.href;
-              if (confirm('即将跳转到外部网站查看「' + job.title + '」原帖\\n\\n' + url + '\\n\\n是否继续？')) {
-                window.open(url, '_blank', 'noopener,noreferrer');
-              }
+            // 取消编辑
+            document.getElementById('left-url-cancel').addEventListener('click', function() {
+              renderUrlSection();
             });
 
-            // 渲染A维度
-            renderAAnalysis(job.a_analysis);
+            // ==================== 右栏 - 解析文字 + 关键词高亮 ====================
+            const parsedText = document.getElementById('parsed-text');
+            const rawContent = job.raw_content || '无原始内容';
+            
+            // 关键词列表（从 A/B 维度提取）
+            const keywords = [];
+            if (job.a_analysis?.A1_tech_stack?.keywords) {
+              keywords.push(...job.a_analysis.A1_tech_stack.keywords);
+            }
+            if (job.b_analysis?.B2_tech_requirement?.tech_depth) {
+              const depth = job.b_analysis.B2_tech_requirement.tech_depth;
+              if (depth['了解']) keywords.push(...depth['了解']);
+              if (depth['熟悉']) keywords.push(...depth['熟悉']);
+              if (depth['精通']) keywords.push(...depth['精通']);
+            }
+            
+            // 高亮关键词（简化版，避免正则转义问题）
+            function highlightKeywords(text, words) {
+              if (!words || words.length === 0) return escapeHtml(text);
+              
+              let result = escapeHtml(text);
+              const uniqueWords = [...new Set(words)].filter(w => w && w.length > 1);
+              
+              uniqueWords.forEach(function(word) {
+                // 简单的字符串替换，大小写不敏感
+                var lowerResult = result.toLowerCase();
+                var lowerWord = word.toLowerCase();
+                var startIndex = 0;
+                var index;
+                var newResult = '';
+                
+                while ((index = lowerResult.indexOf(lowerWord, startIndex)) !== -1) {
+                  newResult += result.substring(startIndex, index);
+                  newResult += '<mark class="bg-yellow-200 px-0.5 rounded">' + result.substring(index, index + word.length) + '</mark>';
+                  startIndex = index + word.length;
+                }
+                newResult += result.substring(startIndex);
+                result = newResult || result;
+              });
+              
+              return result;
+            }
+            
+            parsedText.innerHTML = highlightKeywords(rawContent, keywords);
+            
+            // 复制按钮
+            document.getElementById('copy-text-btn').addEventListener('click', function() {
+              navigator.clipboard.writeText(rawContent).then(function() {
+                if (window.JobCopilot && window.JobCopilot.showToast) {
+                  window.JobCopilot.showToast('已复制到剪贴板', 'success');
+                }
+              }).catch(function() {
+                // Fallback
+                const textarea = document.createElement('textarea');
+                textarea.value = rawContent;
+                document.body.appendChild(textarea);
+                textarea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textarea);
+                if (window.JobCopilot && window.JobCopilot.showToast) {
+                  window.JobCopilot.showToast('已复制到剪贴板', 'success');
+                }
+              });
+            });
 
-            // 渲染B维度
-            renderBAnalysis(job.b_analysis);
-
-            // 原始JD
-            document.getElementById('raw-jd').textContent = job.raw_content || '无原始内容';
-            document.getElementById('show-raw-btn').addEventListener('click', function() {
-              const section = document.getElementById('raw-jd-section');
-              section.classList.toggle('hidden');
-              this.innerHTML = section.classList.contains('hidden')
-                ? '<i class="fas fa-file-lines mr-2"></i>查看原始JD'
-                : '<i class="fas fa-times mr-2"></i>隐藏原始JD';
+            // ==================== 渲染 A/B 维度 ====================
+            renderAAnalysis(job.a_analysis, 'a-analysis-desktop');
+            renderAAnalysis(job.a_analysis, 'a-analysis-mobile');
+            renderBAnalysis(job.b_analysis, 'b-analysis-desktop');
+            renderBAnalysis(job.b_analysis, 'b-analysis-mobile');
+            
+            // Mobile 原始JD折叠
+            const rawJdMobile = document.getElementById('raw-jd-mobile');
+            rawJdMobile.querySelector('pre').textContent = rawContent;
+            document.getElementById('toggle-raw-mobile').addEventListener('click', function() {
+              rawJdMobile.classList.toggle('hidden');
+              const icon = this.querySelector('.toggle-icon-mobile');
+              icon.classList.toggle('fa-chevron-down');
+              icon.classList.toggle('fa-chevron-up');
             });
 
             // 显示内容
             loading.classList.add('hidden');
-            content.classList.remove('hidden');
+            contentDesktop.classList.remove('hidden');
+            contentMobile.classList.remove('hidden');
+            
+            // HTML 转义
+            function escapeHtml(text) {
+              const div = document.createElement('div');
+              div.textContent = text;
+              return div.innerHTML;
+            }
 
             // 渲染A维度分析
-            function renderAAnalysis(a) {
+            function renderAAnalysis(a, containerId) {
               if (!a) return;
               
-              const container = document.getElementById('a-analysis');
+              const container = document.getElementById(containerId);
+              if (!container) return;
+              
               container.innerHTML = [
-                renderACard('A1', '技术栈', a.A1_tech_stack?.keywords?.join(', ') || '无', a.A1_tech_stack?.summary, 'fa-code', getDensityColor(a.A1_tech_stack?.density)),
-                renderACard('A2', '产品类型', a.A2_product_type?.type || '未知', a.A2_product_type?.reason, 'fa-box', 'blue'),
-                renderACard('A3', '业务领域', a.A3_business_domain?.primary || '未知', a.A3_business_domain?.summary, 'fa-industry', 'green'),
-                renderACard('A4', '团队阶段', a.A4_team_stage?.stage || '未知', a.A4_team_stage?.summary, 'fa-users', 'purple'),
+                renderACard('A1', '技术栈', a.A1_tech_stack?.keywords?.join(', ') || '无', a.A1_tech_stack?.summary, getDensityColor(a.A1_tech_stack?.density)),
+                renderACard('A2', '产品类型', a.A2_product_type?.type || '未知', a.A2_product_type?.reason, 'blue'),
+                renderACard('A3', '业务领域', a.A3_business_domain?.primary || '未知', a.A3_business_domain?.summary, 'green'),
+                renderACard('A4', '团队阶段', a.A4_team_stage?.stage || '未知', a.A4_team_stage?.summary, 'purple'),
               ].join('');
             }
 
-            function renderACard(code, title, value, summary, icon, color) {
-              return '<div class="bg-gray-50 rounded-xl p-4">' +
-                '<div class="flex items-center gap-2 mb-2">' +
-                '<span class="text-xs font-bold text-' + color + '-600 bg-' + color + '-100 px-2 py-0.5 rounded">' + code + '</span>' +
-                '<span class="font-medium">' + title + '</span>' +
+            function renderACard(code, title, value, summary, color) {
+              return '<div class="bg-gray-50 rounded-lg p-3">' +
+                '<div class="flex items-center gap-2 mb-1">' +
+                '<span class="text-xs font-bold text-' + color + '-600 bg-' + color + '-100 px-1.5 py-0.5 rounded">' + code + '</span>' +
+                '<span class="text-sm font-medium">' + title + '</span>' +
                 '</div>' +
-                '<p class="text-gray-900 mb-2">' + value + '</p>' +
-                (summary ? '<p class="text-sm text-gray-500"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + summary + '</p>' : '') +
+                '<p class="text-sm text-gray-900 mb-1">' + value + '</p>' +
+                (summary ? '<p class="text-xs text-gray-500"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + summary + '</p>' : '') +
                 '</div>';
             }
 
@@ -948,10 +1158,12 @@ app.get('/job/:id', (c) => {
             }
 
             // 渲染B维度分析
-            function renderBAnalysis(b) {
+            function renderBAnalysis(b, containerId) {
               if (!b) return;
               
-              const container = document.getElementById('b-analysis');
+              const container = document.getElementById(containerId);
+              if (!container) return;
+              
               container.innerHTML = [
                 renderBSection('B1', '行业背景要求', renderB1Content(b.B1_industry_requirement)),
                 renderBSection('B2', '技术背景要求', renderB2Content(b.B2_tech_requirement)),
@@ -960,7 +1172,7 @@ app.get('/job/:id', (c) => {
               ].join('');
 
               // 绑定折叠事件
-              document.querySelectorAll('.b-section-header').forEach(header => {
+              container.querySelectorAll('.b-section-header').forEach(header => {
                 header.addEventListener('click', function() {
                   const content = this.nextElementSibling;
                   const icon = this.querySelector('.toggle-icon');
@@ -972,57 +1184,57 @@ app.get('/job/:id', (c) => {
             }
 
             function renderBSection(code, title, content) {
-              return '<div class="border border-gray-200 rounded-xl overflow-hidden">' +
-                '<div class="b-section-header flex items-center justify-between p-4 bg-gray-50 cursor-pointer hover:bg-gray-100">' +
+              return '<div class="border border-gray-200 rounded-lg overflow-hidden">' +
+                '<div class="b-section-header flex items-center justify-between p-3 bg-gray-50 cursor-pointer hover:bg-gray-100">' +
                 '<div class="flex items-center gap-2">' +
-                '<span class="text-xs font-bold text-purple-600 bg-purple-100 px-2 py-0.5 rounded">' + code + '</span>' +
-                '<span class="font-medium">' + title + '</span>' +
+                '<span class="text-xs font-bold text-purple-600 bg-purple-100 px-1.5 py-0.5 rounded">' + code + '</span>' +
+                '<span class="text-sm font-medium">' + title + '</span>' +
                 '</div>' +
-                '<i class="fas fa-chevron-down toggle-icon text-gray-400"></i>' +
+                '<i class="fas fa-chevron-down toggle-icon text-gray-400 text-sm"></i>' +
                 '</div>' +
-                '<div class="p-4 border-t border-gray-200">' + content + '</div>' +
+                '<div class="p-3 border-t border-gray-200">' + content + '</div>' +
                 '</div>';
             }
 
             function renderB1Content(b1) {
-              if (!b1) return '<p class="text-gray-500">无数据</p>';
-              return '<div class="space-y-2 text-sm">' +
+              if (!b1) return '<p class="text-gray-500 text-sm">无数据</p>';
+              return '<div class="space-y-1.5 text-sm">' +
                 '<p><span class="text-gray-500">是否必需：</span>' + (b1.required ? '<span class="text-red-500">是</span>' : '<span class="text-green-500">否</span>') + '</p>' +
-                '<p><span class="text-gray-500">是否优先：</span>' + (b1.preferred ? '<span class="text-yellow-500">是</span>' : '否') + '</p>' +
-                '<p><span class="text-gray-500">年限要求：</span>' + b1.years + '</p>' +
-                '<p><span class="text-gray-500">具体行业：</span>' + b1.specific_industry + '</p>' +
-                '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b1.summary + '</p>' +
+                '<p><span class="text-gray-500">是否优先：</span>' + (b1.preferred ? '<span class="text-yellow-600">是</span>' : '否') + '</p>' +
+                '<p><span class="text-gray-500">年限要求：</span>' + (b1.years || '不限') + '</p>' +
+                '<p><span class="text-gray-500">具体行业：</span>' + (b1.specific_industry || '不限') + '</p>' +
+                (b1.summary ? '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2 text-xs"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b1.summary + '</p>' : '') +
                 '</div>';
             }
 
             function renderB2Content(b2) {
-              if (!b2) return '<p class="text-gray-500">无数据</p>';
+              if (!b2) return '<p class="text-gray-500 text-sm">无数据</p>';
               const depth = b2.tech_depth || {};
-              return '<div class="space-y-2 text-sm">' +
-                '<p><span class="text-gray-500">学历要求：</span>' + b2.education + '</p>' +
-                (depth['了解']?.length ? '<p><span class="text-gray-500">了解：</span>' + depth['了解'].join(', ') + '</p>' : '') +
-                (depth['熟悉']?.length ? '<p><span class="text-gray-500">熟悉：</span>' + depth['熟悉'].join(', ') + '</p>' : '') +
-                (depth['精通']?.length ? '<p><span class="text-gray-500">精通：</span>' + depth['精通'].join(', ') + '</p>' : '') +
-                '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b2.summary + '</p>' +
+              return '<div class="space-y-1.5 text-sm">' +
+                '<p><span class="text-gray-500">学历要求：</span>' + (b2.education || '不限') + '</p>' +
+                (depth['了解']?.length ? '<p><span class="text-gray-500">了解：</span><span class="text-blue-600">' + depth['了解'].join(', ') + '</span></p>' : '') +
+                (depth['熟悉']?.length ? '<p><span class="text-gray-500">熟悉：</span><span class="text-yellow-600">' + depth['熟悉'].join(', ') + '</span></p>' : '') +
+                (depth['精通']?.length ? '<p><span class="text-gray-500">精通：</span><span class="text-red-600">' + depth['精通'].join(', ') + '</span></p>' : '') +
+                (b2.summary ? '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2 text-xs"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b2.summary + '</p>' : '') +
                 '</div>';
             }
 
             function renderB3Content(b3) {
-              if (!b3) return '<p class="text-gray-500">无数据</p>';
-              return '<div class="space-y-2 text-sm">' +
+              if (!b3) return '<p class="text-gray-500 text-sm">无数据</p>';
+              return '<div class="space-y-1.5 text-sm">' +
                 '<p><span class="text-gray-500">产品类型：</span>' + (b3.product_types?.join(', ') || '不限') + '</p>' +
                 '<p><span class="text-gray-500">全周期经验：</span>' + (b3.need_full_cycle ? '<span class="text-red-500">需要</span>' : '不要求') + '</p>' +
                 '<p><span class="text-gray-500">0-1经验：</span>' + (b3.need_0to1 ? '<span class="text-red-500">需要</span>' : '不要求') + '</p>' +
-                '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b3.summary + '</p>' +
+                (b3.summary ? '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2 text-xs"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b3.summary + '</p>' : '') +
                 '</div>';
             }
 
             function renderB4Content(b4) {
-              if (!b4) return '<p class="text-gray-500">无数据</p>';
+              if (!b4) return '<p class="text-gray-500 text-sm">无数据</p>';
               const caps = b4.capabilities || [];
-              return '<div class="space-y-2 text-sm">' +
-                caps.map(cap => '<div class="flex gap-2"><span class="text-gray-900 font-medium whitespace-nowrap">' + cap.name + '：</span><span class="text-gray-600">' + cap.detail + '</span></div>').join('') +
-                '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b4.summary + '</p>' +
+              return '<div class="space-y-1.5 text-sm">' +
+                caps.map(cap => '<div class="flex gap-1"><span class="text-gray-900 font-medium whitespace-nowrap">' + cap.name + '：</span><span class="text-gray-600">' + cap.detail + '</span></div>').join('') +
+                (b4.summary ? '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2 text-xs"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b4.summary + '</p>' : '') +
                 '</div>';
             }
           });
