@@ -5,9 +5,16 @@
  * 技术方案：ScrapingBee API（处理动态渲染和反爬）
  */
 
-// ScrapingBee API 配置
+// ScrapingBee API 配置（备用）
 const SCRAPING_BEE_API_KEY = '9V8189UIYC695NDDB9YPKI83YE41N7YCWH7GQKYH7XJO9FD0FH5SQLE2KZ66V0Q2ALTWBCO1ZUJUKJDW';
 const SCRAPING_BEE_URL = 'https://app.scrapingbee.com/api/v1/';
+
+// ScraperAPI 配置（主用）
+const SCRAPER_API_KEY = 'c26749f29bbd48724ba093687f310b2e';
+const SCRAPER_API_URL = 'https://api.scraperapi.com';
+
+// 使用哪个 API
+const USE_SCRAPER_API = true;
 
 /**
  * 平台配置接口
@@ -42,20 +49,21 @@ export const PLATFORM_CONFIGS: PlatformConfig[] = [
   {
     name: 'zhipin',
     displayName: 'Boss直聘',
-    domains: ['zhipin.com', 'www.zhipin.com'],
+    domains: ['zhipin.com', 'www.zhipin.com', 'm.zhipin.com'],
     selectors: {
-      title: ['.job-banner .name h1', '.job-title', '.info-primary .name h1', 'h1.name'],
-      company: ['.job-banner .name .company', '.company-info .name', '.info-company .name', '.company-name a'],
-      jd: ['.job-detail .job-sec-text', '.job-detail-section', '.job-sec .text', '.detail-content'],
-      salary: ['.job-banner .salary', '.salary', '.info-primary .salary'],
-      location: ['.job-banner .location', '.location-address', '.info-primary .sider-in'],
-      requirements: ['.job-detail .job-sec-text', '.detail-content'],
+      // PC端 + 移动端选择器
+      title: ['.job-banner .name h1', '.job-title', '.info-primary .name h1', 'h1.name', '.job-name', '.position-name', '.name'],
+      company: ['.job-banner .name .company', '.company-info .name', '.info-company .name', '.company-name a', '.company-name', '.company'],
+      jd: ['.job-detail .job-sec-text', '.job-detail-section', '.job-sec .text', '.detail-content', '.job-detail', '.text', '.job-description', '.description'],
+      salary: ['.job-banner .salary', '.salary', '.info-primary .salary', '.job-salary', '.red'],
+      location: ['.job-banner .location', '.location-address', '.info-primary .sider-in', '.job-address', '.address'],
+      requirements: ['.job-detail .job-sec-text', '.detail-content', '.job-detail', '.job-description'],
     },
     requiresJsRender: true,
-    requiresCookie: false,
+    requiresCookie: true,  // Boss直聘需要 Cookie
     extraConfig: {
-      waitFor: '.job-detail',
-      blockResources: true,
+      // 不等待特定元素，避免超时
+      blockResources: false,
     },
   },
   {
@@ -182,7 +190,57 @@ export function getSupportedPlatforms(): Array<{ name: string; displayName: stri
 }
 
 /**
- * 使用 ScrapingBee 爬取页面
+ * 使用 ScraperAPI 爬取页面
+ */
+async function fetchWithScraperAPI(
+  url: string,
+  config: PlatformConfig,
+  cookie?: string
+): Promise<{ html: string; statusCode: number }> {
+  const params = new URLSearchParams({
+    api_key: SCRAPER_API_KEY,
+    url: url,
+    render: config.requiresJsRender ? 'true' : 'false',
+    country_code: 'cn',       // 中国代理
+    premium: 'true',          // 使用高级代理
+    session_number: '123',    // 保持会话
+  });
+  
+  // 添加 Cookie
+  if (cookie && cookie.trim()) {
+    // ScraperAPI 通过 header 传递 Cookie
+    params.append('keep_headers', 'true');
+  }
+  
+  console.log(`[Scraper] ScraperAPI 请求 URL: ${url}`);
+  
+  const headers: Record<string, string> = {
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8',
+  };
+  
+  // 添加 Cookie 到请求头
+  if (cookie && cookie.trim()) {
+    headers['Cookie'] = cookie;
+    console.log(`[Scraper] 添加 Cookie，长度: ${cookie.length}`);
+  }
+  
+  const response = await fetch(`${SCRAPER_API_URL}?${params.toString()}`, {
+    headers,
+  });
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(`ScraperAPI 错误: ${response.status} - ${errorText}`);
+  }
+  
+  const html = await response.text();
+  console.log(`[Scraper] 获取到 HTML 长度: ${html.length}`);
+  return { html, statusCode: response.status };
+}
+
+/**
+ * 使用 ScrapingBee 爬取页面（备用）
  */
 async function fetchWithScrapingBee(
   url: string, 
@@ -194,22 +252,21 @@ async function fetchWithScrapingBee(
     url: url,
     render_js: config.requiresJsRender ? 'true' : 'false',
     block_resources: config.extraConfig?.blockResources ? 'true' : 'false',
-    premium_proxy: 'true',    // 使用高级代理，更稳定
-    country_code: 'cn',       // 中国代理
+    premium_proxy: 'true',
+    country_code: 'cn',
   });
   
-  // 等待特定元素加载
-  if (config.extraConfig?.waitFor) {
-    params.append('wait_for', config.extraConfig.waitFor);
+  if (cookie && cookie.trim()) {
+    const cleanCookie = cookie.split(';').map(c => c.trim()).filter(c => c.length > 0).join(';');
+    params.append('forward_headers', 'true');
+    console.log(`[Scraper] Cookie 长度: ${cleanCookie.length}`);
   }
   
-  // 添加 Cookie（登录态）
-  if (cookie) {
-    params.append('cookies', cookie);
-  }
+  params.append('timeout', '60000');
+  params.append('wait', '8000');
+  params.append('wait_browser', 'networkidle2');
   
-  // 设置超时
-  params.append('timeout', '30000');
+  console.log(`[Scraper] ScrapingBee 请求 URL: ${url}`);
   
   const response = await fetch(`${SCRAPING_BEE_URL}?${params.toString()}`);
   
@@ -219,7 +276,23 @@ async function fetchWithScrapingBee(
   }
   
   const html = await response.text();
+  console.log(`[Scraper] 获取到 HTML 长度: ${html.length}`);
   return { html, statusCode: response.status };
+}
+
+/**
+ * 统一的页面爬取函数
+ */
+async function fetchPage(
+  url: string,
+  config: PlatformConfig,
+  cookie?: string
+): Promise<{ html: string; statusCode: number }> {
+  if (USE_SCRAPER_API) {
+    return fetchWithScraperAPI(url, config, cookie);
+  } else {
+    return fetchWithScrapingBee(url, config, cookie);
+  }
 }
 
 /**
@@ -385,8 +458,8 @@ export async function scrapeJobUrl(
   console.log(`[Scraper] 识别平台: ${platform.displayName}`);
   
   try {
-    // 使用 ScrapingBee 获取页面
-    const { html } = await fetchWithScrapingBee(url, platform, options?.cookie);
+    // 使用爬虫 API 获取页面
+    const { html } = await fetchPage(url, platform, options?.cookie);
     
     console.log(`[Scraper] 页面获取成功，HTML 长度: ${html.length}`);
     
@@ -401,9 +474,20 @@ export async function scrapeJobUrl(
     
     // 验证提取结果
     if (!jdContent || jdContent.length < 50) {
+      // 调试时输出 HTML 前 2000 字符
+      console.log(`[Scraper] 提取失败，HTML 前 2000 字符: ${html.substring(0, 2000)}`);
+      
       return {
         success: false,
         error: '无法提取 JD 内容，页面结构可能已变化',
+        data: options?.debug ? {
+          title: title || '',
+          company: company || '',
+          salary: '',
+          location: '',
+          jdContent: '',
+          rawHtml: html.substring(0, 5000),  // 返回部分 HTML 用于调试
+        } : undefined,
         meta: {
           url,
           platform: platform.name,
