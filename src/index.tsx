@@ -251,6 +251,10 @@ app.get('/job/new', (c) => {
                 <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-4"></i>
                 <p class="text-gray-500">拖拽图片到此处，或点击选择</p>
                 <p class="text-sm text-gray-400 mt-1">支持 JPG、PNG 格式</p>
+                <p class="text-sm text-blue-500 mt-2">
+                  <i class="fas fa-paste mr-1"></i>
+                  支持 Ctrl+V / Cmd+V 直接粘贴截图
+                </p>
               </div>
               <div id="upload-preview" class="hidden">
                 <img id="preview-image" class="max-h-64 mx-auto rounded-lg" />
@@ -400,6 +404,53 @@ app.get('/job/new', (c) => {
                 fileInput.value = '';
                 uploadPlaceholder.classList.remove('hidden');
                 uploadPreview.classList.add('hidden');
+              }
+            });
+
+            // 剪贴板粘贴图片支持
+            document.addEventListener('paste', function(e) {
+              // 如果焦点在文本输入框，不处理图片粘贴
+              if (document.activeElement === textInput) {
+                return;
+              }
+              
+              const items = e.clipboardData?.items;
+              if (!items) return;
+              
+              for (let i = 0; i < items.length; i++) {
+                const item = items[i];
+                if (item.type.startsWith('image/')) {
+                  e.preventDefault();
+                  const file = item.getAsFile();
+                  if (file) {
+                    // 显示粘贴成功提示
+                    if (window.JobCopilot && window.JobCopilot.showToast) {
+                      window.JobCopilot.showToast('截图已粘贴', 'success');
+                    }
+                    handleImageSelect(file);
+                  }
+                  break;
+                }
+              }
+            });
+
+            // 上传区域获得焦点时的视觉反馈
+            uploadArea.setAttribute('tabindex', '0');
+            uploadArea.addEventListener('focus', function() {
+              uploadArea.classList.add('border-blue-400', 'ring-2', 'ring-blue-100');
+            });
+            uploadArea.addEventListener('blur', function() {
+              uploadArea.classList.remove('border-blue-400', 'ring-2', 'ring-blue-100');
+            });
+            
+            // 键盘快捷键提示
+            uploadArea.addEventListener('keydown', function(e) {
+              if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+                // paste 事件会自动触发，这里只是为了视觉反馈
+                uploadArea.classList.add('bg-blue-50');
+                setTimeout(() => {
+                  uploadArea.classList.remove('bg-blue-50');
+                }, 200);
               }
             });
 
