@@ -2148,6 +2148,24 @@ app.get('/resume', (c) => {
           </div>
         </div>
 
+        {/* 解析进度 - 移到上传区域上方 */}
+        <div id="parse-progress" class="hidden mb-8">
+          <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+            <div class="flex items-center gap-3 mb-4">
+              <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                <i class="fas fa-spinner loading-spinner text-white text-lg"></i>
+              </div>
+              <div>
+                <h3 class="font-semibold text-gray-900">正在解析简历...</h3>
+                <p class="text-sm text-gray-500 mt-0.5">请稍候，这可能需要 30-60 秒</p>
+              </div>
+            </div>
+            <div id="dag-nodes" class="space-y-2">
+              {/* 动态生成进度节点 */}
+            </div>
+          </div>
+        </div>
+
         {/* 上传区域 */}
         <div id="upload-section">
           <div class="text-center mb-6">
@@ -2200,17 +2218,6 @@ app.get('/resume', (c) => {
               <i class="fas fa-magic mr-2"></i>
               解析简历
             </button>
-          </div>
-        </div>
-
-        {/* 解析进度 */}
-        <div id="parse-progress" class="hidden mt-8">
-          <div class="bg-gray-50 rounded-xl p-6">
-            <h3 class="font-semibold mb-4">
-              <i class="fas fa-spinner loading-spinner mr-2"></i>
-              正在解析简历...
-            </h3>
-            <div id="dag-nodes" class="space-y-3"></div>
           </div>
         </div>
 
@@ -2354,6 +2361,11 @@ app.get('/resume', (c) => {
               parseBtn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-2"></i>解析中...';
               progressArea.classList.remove('hidden');
               errorArea.classList.add('hidden');
+              
+              // 平滑滚动到进度区域，让用户看到解析进度
+              setTimeout(() => {
+                progressArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }, 100);
 
               try {
                 let result;
@@ -2467,29 +2479,36 @@ app.get('/resume', (c) => {
 
             function renderDAGNodes(nodes) {
               dagNodes.innerHTML = nodes.map(node => {
-                let statusIcon, statusClass;
+                let statusIcon, statusClass, bgClass;
                 switch (node.status) {
                   case 'completed':
                     statusIcon = 'fa-check-circle';
                     statusClass = 'text-green-500';
+                    bgClass = 'bg-green-50 border-green-100';
                     break;
                   case 'running':
                     statusIcon = 'fa-spinner loading-spinner';
                     statusClass = 'text-blue-500';
+                    bgClass = 'bg-blue-50 border-blue-100';
                     break;
                   case 'error':
                     statusIcon = 'fa-times-circle';
                     statusClass = 'text-red-500';
+                    bgClass = 'bg-red-50 border-red-100';
                     break;
                   default:
                     statusIcon = 'fa-circle';
                     statusClass = 'text-gray-300';
+                    bgClass = 'bg-white border-gray-200';
                 }
-                const duration = node.result?.duration_ms ? ' (' + (node.result.duration_ms / 1000).toFixed(1) + 's)' : '';
-                return '<div class="flex items-center gap-3">' +
-                  '<i class="fas ' + statusIcon + ' ' + statusClass + '"></i>' +
-                  '<span class="' + (node.status === 'completed' ? 'text-gray-900' : 'text-gray-500') + '">' +
-                  node.name + duration + '</span></div>';
+                const duration = node.result?.duration_ms ? '<span class="text-xs text-gray-400 ml-2">(' + (node.result.duration_ms / 1000).toFixed(1) + 's)</span>' : '';
+                return '<div class="flex items-center gap-3 p-3 rounded-lg border ' + bgClass + '">' +
+                  '<i class="fas ' + statusIcon + ' ' + statusClass + ' text-lg"></i>' +
+                  '<div class="flex-1">' +
+                  '<span class="' + (node.status === 'completed' ? 'text-gray-900 font-medium' : 'text-gray-600') + '">' +
+                  node.name + '</span>' + duration +
+                  '</div>' +
+                  '</div>';
               }).join('');
             }
           });
