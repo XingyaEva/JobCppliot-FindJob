@@ -53,6 +53,40 @@ export interface ResumeParseOutput {
 const SYSTEM_PROMPT = RESUME_PARSE_PROMPT;
 
 /**
+ * 清理和格式化 MinerU Markdown 输出
+ * 解决标题混乱、段落不分隔等问题
+ */
+function cleanMarkdown(markdown: string): string {
+  let cleaned = markdown;
+  
+  // 1. 移除图片标记（不影响解析）
+  cleaned = cleaned.replace(/!\[.*?\]\(.*?\)/g, '');
+  
+  // 2. 规范标题格式：确保标题前后有空行
+  cleaned = cleaned.replace(/^(#{1,6}\s+.+)$/gm, '\n$1\n');
+  
+  // 3. 分离混在一起的标题和内容
+  // 例如："2024.08-至今\n\n采购管理实施顾问冶金行业事业部" 
+  // 应该分开显示公司、职位、部门
+  cleaned = cleaned.replace(/^([0-9]{4}\.[0-9]{1,2}\s*-\s*.+)$/gm, '\n**时间**: $1\n');
+  
+  // 4. 识别并标记职位/角色信息（通常在时间后面）
+  // 例如："采购管理实施顾问冶金行业事业部"
+  cleaned = cleaned.replace(/^([^#\n]+顾问|[^#\n]+经理|[^#\n]+专员|[^#\n]+实习生)(.*)$/gm, '**职位**: $1 $2\n');
+  
+  // 5. 识别并标记地点信息（城市名）
+  cleaned = cleaned.replace(/^(北京|上海|广州|深圳|杭州|成都|南京|武汉|西安|苏州|厦门|雅加达|德州|枣庄|张家港|济南|青岛|郑州|长沙|重庆|天津)$/gm, '**地点**: $1\n');
+  
+  // 6. 合并多余的空行（最多保留2个换行）
+  cleaned = cleaned.replace(/\n{3,}/g, '\n\n');
+  
+  // 7. 确保关键字段有明确标识
+  cleaned = cleaned.replace(/^([^:\n]+)：([^:\n]+)$/gm, '- **$1**: $2');
+  
+  return cleaned.trim();
+}
+
+/**
  * 执行简历解析
  */
 export async function executeResumeParse(
@@ -63,14 +97,24 @@ export async function executeResumeParse(
   try {
     console.log('[简历解析] 开始提取结构化信息');
 
+    // 清理Markdown格式，提升LLM理解能力
+    const cleanedContent = cleanMarkdown(input.cleanedText);
+    console.log('[简历解析] Markdown清理完成，原始长度:', input.cleanedText.length, '清理后:', cleanedContent.length);
+
     // 构建提示词，包含文件名提示（如果有）
-    let userPrompt = `请将以下简历文本提取为结构化JSON，并生成能力标签。`;
+    let userPrompt = `请将以下简历文本提取为结构化JSON，并生成能力标签。
+
+**重要提示**：
+1. 姓名通常在文档最开头（第一行或前几行）
+2. 完整提取所有工作经历的详细描述，不要遗漏任何内容
+3. 项目经验如果在工作经历中，也需要单独提取到projects数组
+4. 每个工作经历的description字段应该包含完整的职责和成果描述`;
     
     if (input.fileName && input.fileName.length >= 2) {
-      userPrompt += `\n\n**文件名提示**：文件名为 "${input.fileName}"，其中可能包含姓名信息，请结合文档内容进行验证。`;
+      userPrompt += `\n5. 文件名为 "${input.fileName}"，其中可能包含姓名，请优先验证`;
     }
     
-    userPrompt += `\n\n${input.cleanedText}`;
+    userPrompt += `\n\n简历内容：\n\n${cleanedContent}`;
 
     // 使用 resume-parse Agent 配置
     const response = await chat(
