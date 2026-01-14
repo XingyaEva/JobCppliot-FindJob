@@ -145,6 +145,7 @@ export interface Resume {
   id: string;
   // 基础信息
   name: string;                      // 简历名称（如"产品经理简历"）
+  original_file_name?: string;       // 原始文件名（如"张三_产品经理.pdf"）
   basic_info: {
     name: string;
     contact: string;

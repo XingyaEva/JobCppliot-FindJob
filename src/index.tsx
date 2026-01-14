@@ -2797,6 +2797,7 @@ app.get('/resume/:id', (c) => {
                         '<span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full">主版本</span>' :
                         '<span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-600 rounded-full">定向版</span>') +
                     '</div>' +
+                    (resume.original_file_name ? '<p class="text-xs text-gray-400 mb-1"><i class="fas fa-file mr-1"></i>' + resume.original_file_name + '</p>' : '') +
                     '<p class="text-sm text-gray-600">' + (resume.basic_info?.contact || '') + '</p>' +
                     '<p class="text-sm text-gray-500 mt-1">' +
                       '<i class="fas fa-crosshairs mr-1"></i>' + (resume.basic_info?.target_position || '未指定目标岗位') +

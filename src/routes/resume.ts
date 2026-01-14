@@ -116,14 +116,14 @@ resumeRoutes.post('/mineru/upload', async (c) => {
     console.log(`[MinerU] 开始处理文件: ${fileName}, 大小: ${file.size} bytes`);
 
     // 步骤1: 获取上传 URL
-    // 默认开启 OCR，因为简历头部通常有复杂布局（姓名+照片+联系方式）
-    // VLM 模型可能跳过这些特殊区域（如从 Y=148 开始），导致个人信息丢失
+    // 使用 pipeline 模型 + OCR，提高简历头部信息（姓名、联系方式）的识别准确率
+    // pipeline 模型比 vlm 精度更高，特别适合简历这种格式化文档
     const enableOcr = isOcr !== false;  // 除非明确禁用，否则默认开启
-    console.log(`[MinerU] 步骤1: 申请上传 URL... (OCR: ${enableOcr})`);
+    console.log(`[MinerU] 步骤1: 申请上传 URL... (模型: pipeline, OCR: ${enableOcr})`);
     const urlResult = await getUploadUrlAndParse(fileName, {
       isOcr: enableOcr,
       enableTable: true,
-      modelVersion: 'vlm',
+      modelVersion: 'pipeline',  // 使用 pipeline 模型提高精度
     });
 
     if (!urlResult.success || !urlResult.uploadUrl || !urlResult.batchId) {
@@ -199,8 +199,17 @@ resumeRoutes.post('/mineru/parse', async (c) => {
       return c.json({ success: false, error: '文档内容过短或解析失败' }, 400);
     }
 
-    // 调用简历解析 Agent 进行结构化
-    const parseResult = await executeResumeParse({ cleanedText });
+    // 从文件名中提取可能的姓名信息（作为辅助参考）
+    // 例如："张三_产品经理.pdf" -> 提取 "张三"
+    const fileNameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+    const possibleNameFromFile = fileNameWithoutExt.split(/[_\-\s]+/)[0]; // 取第一段作为可能的姓名
+    console.log(`[MinerU] 文件名提取的可能姓名: ${possibleNameFromFile}`);
+
+    // 调用简历解析 Agent 进行结构化（传递文件名作为辅助信息）
+    const parseResult = await executeResumeParse({ 
+      cleanedText,
+      fileName: possibleNameFromFile  // 传递文件名中的可能姓名
+    });
 
     if (!parseResult.success) {
       return c.json({ success: false, error: parseResult.error }, 500);
@@ -212,6 +221,7 @@ resumeRoutes.post('/mineru/parse', async (c) => {
     const resume: Resume = {
       id: resumeId,
       name: parseResult.data!.basic_info?.name || '未命名简历',
+      original_file_name: fileName,  // 保存原始文件名
       basic_info: parseResult.data!.basic_info,
       education: parseResult.data!.education,
       work_experience: parseResult.data!.work_experience,

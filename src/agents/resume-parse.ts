@@ -10,6 +10,7 @@ import type { AgentResult, Resume } from '../types';
 /** 解析输入 */
 export interface ResumeParseInput {
   cleanedText: string;
+  fileName?: string;  // 可选：文件名中提取的可能姓名，作为辅助信息
 }
 
 /** 解析输出（不含id等元数据） */
@@ -62,10 +63,19 @@ export async function executeResumeParse(
   try {
     console.log('[简历解析] 开始提取结构化信息');
 
+    // 构建提示词，包含文件名提示（如果有）
+    let userPrompt = `请将以下简历文本提取为结构化JSON，并生成能力标签。`;
+    
+    if (input.fileName && input.fileName.length >= 2) {
+      userPrompt += `\n\n**文件名提示**：文件名为 "${input.fileName}"，其中可能包含姓名信息，请结合文档内容进行验证。`;
+    }
+    
+    userPrompt += `\n\n${input.cleanedText}`;
+
     // 使用 resume-parse Agent 配置
     const response = await chat(
       SYSTEM_PROMPT,
-      `请将以下简历文本提取为结构化JSON，并生成能力标签：\n\n${input.cleanedText}`,
+      userPrompt,
       { agentId: 'resume-parse', jsonMode: true }
     );
 
