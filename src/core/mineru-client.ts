@@ -80,7 +80,11 @@ export interface BatchResultResponse {
 
 /** 解析选项 */
 export interface ParseOptions {
-  /** 是否开启 OCR（扫描件需要） */
+  /** 
+   * 是否开启 OCR
+   * 默认 true - 简历通常有复杂的头部布局（姓名、照片、联系方式区域），OCR 模式能更好识别
+   * 注意：VLM 模型可能跳过特殊排版区域，导致个人信息丢失
+   */
   isOcr?: boolean;
   /** 是否开启公式识别 */
   enableFormula?: boolean;
@@ -131,7 +135,8 @@ export async function createTaskByUrl(
       headers: getHeaders(),
       body: JSON.stringify({
         url: fileUrl,
-        is_ocr: options.isOcr ?? false,
+        // 默认开启 OCR：简历头部通常有复杂布局（姓名+照片+联系方式），VLM 可能跳过导致丢失个人信息
+        is_ocr: options.isOcr ?? true,
         enable_formula: options.enableFormula ?? false,  // 简历一般不需要公式
         enable_table: options.enableTable ?? true,       // 简历可能有技能表格
         language: options.language ?? 'ch',
@@ -171,7 +176,8 @@ export async function requestUploadUrls(
         files: files.map(f => ({
           name: f.name,
           data_id: f.dataId,
-          is_ocr: f.isOcr ?? options.isOcr ?? false,
+          // 默认开启 OCR：解决简历头部特殊布局导致的信息丢失问题
+          is_ocr: f.isOcr ?? options.isOcr ?? true,
           page_ranges: f.pageRanges ?? options.pageRanges,
         })),
         enable_formula: options.enableFormula ?? false,

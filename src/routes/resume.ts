@@ -116,9 +116,12 @@ resumeRoutes.post('/mineru/upload', async (c) => {
     console.log(`[MinerU] 开始处理文件: ${fileName}, 大小: ${file.size} bytes`);
 
     // 步骤1: 获取上传 URL
-    console.log(`[MinerU] 步骤1: 申请上传 URL...`);
+    // 默认开启 OCR，因为简历头部通常有复杂布局（姓名+照片+联系方式）
+    // VLM 模型可能跳过这些特殊区域（如从 Y=148 开始），导致个人信息丢失
+    const enableOcr = isOcr !== false;  // 除非明确禁用，否则默认开启
+    console.log(`[MinerU] 步骤1: 申请上传 URL... (OCR: ${enableOcr})`);
     const urlResult = await getUploadUrlAndParse(fileName, {
-      isOcr: isOcr,
+      isOcr: enableOcr,
       enableTable: true,
       modelVersion: 'vlm',
     });
@@ -256,11 +259,13 @@ resumeRoutes.post('/mineru/parse-by-url', async (c) => {
       return c.json({ success: false, error: '缺少 fileUrl 参数' }, 400);
     }
 
-    console.log(`[MinerU] 通过 URL 解析文档: ${fileUrl}`);
-
     // 调用 MinerU 解析
+    // 默认开启 OCR，解决简历头部复杂布局导致的信息丢失问题
+    const enableOcr = isOcr !== false;  // 除非明确禁用，否则默认开启
+    console.log(`[MinerU] 通过 URL 解析文档 (OCR: ${enableOcr}): ${fileUrl}`);
+    
     const mineruResult = await parseDocumentByUrl(fileUrl, {
-      isOcr: isOcr ?? false,
+      isOcr: enableOcr,
       enableTable: true,
       modelVersion: 'vlm',
     }, (progress) => {
