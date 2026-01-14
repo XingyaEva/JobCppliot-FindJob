@@ -74,10 +74,96 @@ function switchTab(tabGroup, tabId) {
 const STORAGE_KEYS = {
   JOBS: 'jobcopilot_jobs',
   RESUMES: 'jobcopilot_resumes',
+  RESUME_VERSIONS: 'jobcopilot_resume_versions',  // Phase 7 新增
   MATCHES: 'jobcopilot_matches',
   INTERVIEWS: 'jobcopilot_interviews',
   OPTIMIZATIONS: 'jobcopilot_optimizations'
 };
+
+// ==================== 数据迁移 ====================
+
+/**
+ * 迁移旧版简历数据到新版简历库格式
+ * Phase 7: 简历库增强模块
+ */
+function migrateResumeData() {
+  const MIGRATION_KEY = 'jobcopilot_migration_v7';
+  
+  // 检查是否已迁移
+  if (localStorage.getItem(MIGRATION_KEY)) {
+    return;
+  }
+  
+  try {
+    const resumes = getStorageData(STORAGE_KEYS.RESUMES);
+    if (resumes.length === 0) {
+      localStorage.setItem(MIGRATION_KEY, 'done');
+      return;
+    }
+    
+    // 检查是否需要迁移（旧版没有 is_master 字段）
+    const needsMigration = resumes.some(r => r.is_master === undefined);
+    if (!needsMigration) {
+      localStorage.setItem(MIGRATION_KEY, 'done');
+      return;
+    }
+    
+    console.log('[Migration] 开始迁移简历数据到 v7 格式...');
+    
+    // 迁移每个简历
+    const migratedResumes = resumes.map((resume, index) => ({
+      ...resume,
+      name: resume.name || resume.basic_info?.name || `简历 ${index + 1}`,
+      version: resume.version || 1,
+      version_tag: resume.version_tag || '基础版',
+      linked_jd_ids: resume.linked_jd_ids || [],
+      is_master: resume.is_master !== undefined ? resume.is_master : true,
+      base_resume_id: resume.base_resume_id || null,
+    }));
+    
+    // 保存迁移后的数据
+    setStorageData(STORAGE_KEYS.RESUMES, migratedResumes);
+    
+    // 为每个主版本简历创建初始版本记录
+    const versions = [];
+    migratedResumes.filter(r => r.is_master).forEach(resume => {
+      versions.push({
+        id: generateId(),
+        resume_id: resume.id,
+        version: 1,
+        version_tag: '基础版',
+        content: {
+          basic_info: resume.basic_info,
+          education: resume.education,
+          work_experience: resume.work_experience,
+          projects: resume.projects,
+          skills: resume.skills,
+          ability_tags: resume.ability_tags,
+        },
+        created_by: 'auto',
+        changes_summary: '初始版本（迁移生成）',
+        created_at: resume.created_at || new Date().toISOString(),
+      });
+    });
+    
+    // 保存版本记录
+    if (versions.length > 0) {
+      setStorageData(STORAGE_KEYS.RESUME_VERSIONS, versions);
+    }
+    
+    // 标记迁移完成
+    localStorage.setItem(MIGRATION_KEY, 'done');
+    console.log(`[Migration] 迁移完成: ${migratedResumes.length} 份简历, ${versions.length} 个版本记录`);
+    
+  } catch (err) {
+    console.error('[Migration] 迁移失败:', err);
+  }
+}
+
+// 页面加载时执行迁移
+document.addEventListener('DOMContentLoaded', function() {
+  migrateResumeData();
+});
 
 /**
  * 获取存储数据

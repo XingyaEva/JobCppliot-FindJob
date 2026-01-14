@@ -8,7 +8,7 @@ import { cors } from 'hono/cors'
 import { renderer } from './renderer'
 import { chat, MODELS } from './core/api-client'
 import jobRoutes from './routes/job'
-import resumeRoutes, { matchRoutes } from './routes/resume'
+import resumeRoutes, { matchRoutes, generateTargetedResume } from './routes/resume'
 import interviewRoutes from './routes/interview'
 import optimizeRoutes from './routes/optimize'
 import { metricsRoutes } from './routes/metrics'
@@ -43,8 +43,8 @@ app.get('/', (c) => {
               <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
               </a>
-              <a href="/resume" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                <i class="fas fa-file-alt mr-1.5"></i><span class="hidden sm:inline">我的简历</span>
+              <a href="/resumes" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-folder-open mr-1.5"></i><span class="hidden sm:inline">简历库</span>
               </a>
               <a href="/metrics" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-chart-bar mr-1.5"></i><span class="hidden sm:inline">评测</span>
@@ -1148,13 +1148,16 @@ app.get('/job/:id', (c) => {
             </div>
             <div class="flex items-center gap-2">
               <a id="action-match" href="#" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">
-                <i class="fas fa-chart-pie mr-1"></i>匹配分析
+                <i class="fas fa-chart-pie mr-1"></i><span class="hidden sm:inline">匹配</span>
               </a>
+              <button id="action-targeted-resume" class="px-3 py-1.5 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600">
+                <i class="fas fa-file-export mr-1"></i><span class="hidden sm:inline">定向简历</span>
+              </button>
               <a id="action-interview" href="#" class="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600">
-                <i class="fas fa-comments mr-1"></i>面试准备
+                <i class="fas fa-comments mr-1"></i><span class="hidden sm:inline">面试</span>
               </a>
               <a id="action-optimize" href="#" class="px-3 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600">
-                <i class="fas fa-magic mr-1"></i>简历优化
+                <i class="fas fa-magic mr-1"></i><span class="hidden sm:inline">优化</span>
               </a>
             </div>
           </div>
@@ -1389,6 +1392,62 @@ app.get('/job/:id', (c) => {
             document.getElementById('action-match').href = '/job/' + jobId + '/match';
             document.getElementById('action-interview').href = '/job/' + jobId + '/interview';
             document.getElementById('action-optimize').href = '/job/' + jobId + '/optimize';
+            
+            // 定向简历按钮事件
+            document.getElementById('action-targeted-resume').addEventListener('click', async function() {
+              // 检查简历
+              var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+              if (resumes.length === 0) {
+                alert('请先上传简历！');
+                window.location.href = '/resume';
+                return;
+              }
+              
+              // 检查岗位分析
+              if (!job.a_analysis || !job.b_analysis) {
+                alert('岗位分析未完成，请等待解析完成后再生成定向简历');
+                return;
+              }
+              
+              if (!confirm('是否为「' + job.title + '」岗位生成定向简历？\\n\\n将基于您的简历和岗位分析结果，生成针对性优化的简历版本。')) {
+                return;
+              }
+              
+              var btn = this;
+              btn.disabled = true;
+              btn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-1"></i>生成中...';
+              
+              try {
+                var response = await fetch('/api/job/' + jobId + '/generate-resume', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ resumeId: resumes[0].id }),
+                });
+                
+                var result = await response.json();
+                
+                if (result.success) {
+                  // 保存新简历到 localStorage
+                  resumes.unshift(result.resume);
+                  localStorage.setItem('jobcopilot_resumes', JSON.stringify(resumes));
+                  
+                  alert('定向简历生成成功！\\n\\n' + 
+                    '版本标签: ' + result.resume.version_tag + '\\n' +
+                    '预估提升: ' + result.match_improvement + '\\n\\n' +
+                    '即将跳转到简历详情页...');
+                  
+                  window.location.href = '/resume/' + result.resume.id;
+                } else {
+                  throw new Error(result.error || '生成失败');
+                }
+              } catch (err) {
+                console.error('定向简历生成失败:', err);
+                alert('生成失败: ' + err.message);
+              } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-file-export mr-1"></i><span class="hidden sm:inline">定向简历</span>';
+              }
+            });
 
             // 渲染页面标题
             document.getElementById('page-title').textContent = job.title + ' @ ' + job.company;
@@ -2325,6 +2384,555 @@ app.get('/resume', (c) => {
       }} />
     </div>,
     { title: '我的简历 - Job Copilot' }
+  )
+})
+
+// ==================== 简历库页面（Phase 7 新增） ====================
+
+// 简历库列表页
+app.get('/resumes', (c) => {
+  return c.render(
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 统一导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/" class="flex items-center gap-2 font-bold text-lg">
+              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
+                <i class="fas fa-robot"></i>
+              </span>
+              <span class="hidden sm:inline">Job Copilot</span>
+            </a>
+            <nav class="flex items-center gap-1">
+              <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-home mr-1.5"></i><span class="hidden sm:inline">首页</span>
+              </a>
+              <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
+              </a>
+              <a href="/resumes" class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-900">
+                <i class="fas fa-folder-open mr-1.5"></i><span class="hidden sm:inline">简历库</span>
+              </a>
+              <a href="/resume" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-file-alt mr-1.5"></i><span class="hidden sm:inline">上传简历</span>
+              </a>
+            </nav>
+            <a href="/resume" class="px-3 py-1.5 bg-black text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+              <i class="fas fa-plus mr-1"></i><span class="hidden sm:inline">新建</span>
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
+        {/* 面包屑 */}
+        <nav class="flex items-center gap-2 text-sm text-gray-500 mb-6">
+          <a href="/" class="hover:text-gray-700"><i class="fas fa-home"></i></a>
+          <i class="fas fa-chevron-right text-xs text-gray-300"></i>
+          <span class="text-gray-900 font-medium">简历库</span>
+        </nav>
+
+        {/* 标题和统计 */}
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-2xl font-bold">简历库</h1>
+            <p id="resumes-stats" class="text-sm text-gray-500 mt-1">共 0 份简历</p>
+          </div>
+          <a href="/resume" class="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800">
+            <i class="fas fa-plus mr-1"></i>上传新简历
+          </a>
+        </div>
+
+        {/* 简历列表 */}
+        <div id="resumes-list" class="space-y-4">
+          {/* 骨架屏 */}
+          <div class="p-4 border border-gray-200 rounded-xl">
+            <div class="skeleton h-5 w-1/3 mb-3"></div>
+            <div class="skeleton h-4 w-1/2 mb-2"></div>
+            <div class="flex gap-2">
+              <div class="skeleton h-6 w-16 rounded-full"></div>
+              <div class="skeleton h-6 w-20 rounded-full"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* 空状态 */}
+        <div id="empty-state" class="hidden text-center py-12">
+          <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-folder-open text-2xl text-gray-400"></i>
+          </div>
+          <h3 class="text-lg font-medium text-gray-900 mb-2">暂无简历</h3>
+          <p class="text-gray-500 mb-4">上传您的第一份简历开始求职之旅</p>
+          <a href="/resume" class="inline-flex items-center px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800">
+            <i class="fas fa-plus mr-2"></i>上传简历
+          </a>
+        </div>
+      </main>
+
+      {/* 页脚 */}
+      <footer class="border-t border-gray-100 mt-auto">
+        <div class="max-w-6xl mx-auto px-4 py-6">
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-400">
+            <span>Job Copilot v0.7.0 - Phase 7 简历库</span>
+          </div>
+        </div>
+      </footer>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            var resumesList = document.getElementById('resumes-list');
+            var emptyState = document.getElementById('empty-state');
+            var resumesStats = document.getElementById('resumes-stats');
+            
+            var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+            var versions = JSON.parse(localStorage.getItem('jobcopilot_resume_versions') || '[]');
+            var jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+            
+            // 统计信息
+            var masterCount = resumes.filter(function(r) { return r.is_master !== false; }).length;
+            var versionCount = resumes.filter(function(r) { return r.is_master === false; }).length;
+            resumesStats.textContent = '共 ' + resumes.length + ' 份简历' + 
+              (masterCount > 0 ? ' (' + masterCount + ' 主版本' + (versionCount > 0 ? ', ' + versionCount + ' 定向版' : '') + ')' : '');
+            
+            if (resumes.length === 0) {
+              resumesList.innerHTML = '';
+              emptyState.classList.remove('hidden');
+              return;
+            }
+            
+            // 获取简历的版本数
+            function getVersionCount(resumeId) {
+              return versions.filter(function(v) { return v.resume_id === resumeId; }).length;
+            }
+            
+            // 获取关联的岗位名称
+            function getLinkedJobs(linkedIds) {
+              if (!linkedIds || linkedIds.length === 0) return [];
+              return linkedIds.map(function(id) {
+                var job = jobs.find(function(j) { return j.id === id; });
+                return job ? job.title : null;
+              }).filter(Boolean);
+            }
+            
+            // 格式化时间
+            function formatDate(dateStr) {
+              if (!dateStr) return '';
+              var date = new Date(dateStr);
+              return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric' });
+            }
+            
+            resumesList.innerHTML = resumes.map(function(resume) {
+              var versionCount = getVersionCount(resume.id);
+              var linkedJobs = getLinkedJobs(resume.linked_jd_ids);
+              var isMaster = resume.is_master !== false;
+              
+              return '<div class="p-4 border border-gray-200 rounded-xl hover:shadow-md transition-shadow">' +
+                '<div class="flex items-start justify-between">' +
+                  '<div class="flex-1">' +
+                    '<div class="flex items-center gap-2 mb-2">' +
+                      '<a href="/resume/' + resume.id + '" class="font-semibold text-lg text-gray-900 hover:text-blue-600">' +
+                        (resume.name || resume.basic_info?.name || '未命名简历') +
+                      '</a>' +
+                      (isMaster ? 
+                        '<span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full">主版本</span>' :
+                        '<span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-600 rounded-full">定向版</span>') +
+                      (resume.version_tag ? 
+                        '<span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">' + resume.version_tag + '</span>' : '') +
+                    '</div>' +
+                    '<p class="text-sm text-gray-500 mb-2">' +
+                      '<i class="fas fa-user mr-1"></i>' + (resume.basic_info?.name || '未知') + 
+                      (resume.basic_info?.target_position ? ' · <i class="fas fa-crosshairs ml-2 mr-1"></i>' + resume.basic_info.target_position : '') +
+                    '</p>' +
+                    '<div class="flex flex-wrap gap-2 mb-3">' +
+                      (resume.ability_tags?.industry?.slice(0, 2).map(function(tag) {
+                        return '<span class="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded-full">' + tag + '</span>';
+                      }).join('') || '') +
+                      (resume.ability_tags?.technology?.slice(0, 2).map(function(tag) {
+                        return '<span class="text-xs px-2 py-0.5 bg-yellow-100 text-yellow-600 rounded-full">' + tag + '</span>';
+                      }).join('') || '') +
+                    '</div>' +
+                    (linkedJobs.length > 0 ?
+                      '<div class="text-xs text-gray-500 mb-2">' +
+                        '<i class="fas fa-link mr-1"></i>关联岗位: ' + linkedJobs.slice(0, 3).join('、') +
+                        (linkedJobs.length > 3 ? ' 等' + linkedJobs.length + '个' : '') +
+                      '</div>' : '') +
+                  '</div>' +
+                  '<div class="flex flex-col items-end gap-2">' +
+                    '<div class="flex items-center gap-2">' +
+                      '<span class="text-xs text-gray-400">' + formatDate(resume.updated_at || resume.created_at) + '</span>' +
+                      '<button onclick="event.stopPropagation();deleteResume(\\'' + resume.id + '\\')" class="text-gray-400 hover:text-red-500 p-1" title="删除">' +
+                        '<i class="fas fa-trash-alt text-xs"></i>' +
+                      '</button>' +
+                    '</div>' +
+                    (versionCount > 0 ?
+                      '<a href="/resume/' + resume.id + '/versions" class="text-xs text-blue-500 hover:text-blue-600">' +
+                        '<i class="fas fa-history mr-1"></i>' + versionCount + ' 个版本' +
+                      '</a>' : '') +
+                  '</div>' +
+                '</div>' +
+                '<div class="flex items-center justify-between mt-3 pt-3 border-t border-gray-100">' +
+                  '<div class="text-xs text-gray-400">版本 v' + (resume.version || 1) + '</div>' +
+                  '<div class="flex gap-2">' +
+                    '<a href="/resume/' + resume.id + '" class="text-xs text-blue-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-blue-50">查看详情</a>' +
+                    '<a href="/resume/' + resume.id + '/versions" class="text-xs text-purple-500 hover:text-purple-600 px-2 py-1 rounded hover:bg-purple-50">版本历史</a>' +
+                    '<a href="/jobs" class="text-xs text-green-500 hover:text-green-600 px-2 py-1 rounded hover:bg-green-50">去匹配</a>' +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+            }).join('');
+          });
+          
+          // 删除简历
+          function deleteResume(id) {
+            if (!confirm('确定要删除这份简历吗？相关的版本记录也会被删除。')) return;
+            
+            var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+            var versions = JSON.parse(localStorage.getItem('jobcopilot_resume_versions') || '[]');
+            
+            // 删除简历
+            resumes = resumes.filter(function(r) { return r.id !== id; });
+            localStorage.setItem('jobcopilot_resumes', JSON.stringify(resumes));
+            
+            // 删除相关版本
+            versions = versions.filter(function(v) { return v.resume_id !== id; });
+            localStorage.setItem('jobcopilot_resume_versions', JSON.stringify(versions));
+            
+            location.reload();
+          }
+        `
+      }} />
+    </div>,
+    { title: '简历库 - Job Copilot' }
+  )
+})
+
+// 简历详情页
+app.get('/resume/:id', (c) => {
+  const resumeId = c.req.param('id')
+  
+  return c.render(
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/" class="flex items-center gap-2 font-bold text-lg">
+              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
+                <i class="fas fa-robot"></i>
+              </span>
+              <span class="hidden sm:inline">Job Copilot</span>
+            </a>
+            <nav class="flex items-center gap-1">
+              <a href="/resumes" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-folder-open mr-1.5"></i><span class="hidden sm:inline">简历库</span>
+              </a>
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 max-w-4xl mx-auto px-4 py-8 w-full">
+        {/* 面包屑 */}
+        <nav class="flex items-center gap-2 text-sm text-gray-500 mb-6">
+          <a href="/" class="hover:text-gray-700"><i class="fas fa-home"></i></a>
+          <i class="fas fa-chevron-right text-xs text-gray-300"></i>
+          <a href="/resumes" class="hover:text-gray-700">简历库</a>
+          <i class="fas fa-chevron-right text-xs text-gray-300"></i>
+          <span id="breadcrumb-name" class="text-gray-900 font-medium">简历详情</span>
+        </nav>
+
+        {/* 简历内容 */}
+        <div id="resume-content" class="space-y-6">
+          {/* 加载状态 */}
+          <div class="text-center py-12">
+            <i class="fas fa-spinner loading-spinner text-3xl text-gray-400 mb-4"></i>
+            <p class="text-gray-500">加载中...</p>
+          </div>
+        </div>
+      </main>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            var resumeId = '${resumeId}';
+            var content = document.getElementById('resume-content');
+            var breadcrumbName = document.getElementById('breadcrumb-name');
+            
+            var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+            var resume = resumes.find(function(r) { return r.id === resumeId; });
+            
+            if (!resume) {
+              content.innerHTML = '<div class="text-center py-12">' +
+                '<i class="fas fa-exclamation-circle text-3xl text-red-400 mb-4"></i>' +
+                '<p class="text-red-500">未找到简历</p>' +
+                '<a href="/resumes" class="mt-4 inline-block text-blue-500 hover:text-blue-600">返回简历库</a>' +
+              '</div>';
+              return;
+            }
+            
+            breadcrumbName.textContent = resume.name || resume.basic_info?.name || '简历详情';
+            
+            content.innerHTML = 
+              // 基础信息卡片
+              '<div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6">' +
+                '<div class="flex items-start justify-between mb-4">' +
+                  '<div>' +
+                    '<div class="flex items-center gap-2 mb-1">' +
+                      '<h1 class="text-2xl font-bold">' + (resume.name || resume.basic_info?.name || '未命名简历') + '</h1>' +
+                      (resume.is_master !== false ? 
+                        '<span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full">主版本</span>' :
+                        '<span class="px-2 py-0.5 text-xs bg-purple-100 text-purple-600 rounded-full">定向版</span>') +
+                    '</div>' +
+                    '<p class="text-sm text-gray-600">' + (resume.basic_info?.contact || '') + '</p>' +
+                    '<p class="text-sm text-gray-500 mt-1">' +
+                      '<i class="fas fa-crosshairs mr-1"></i>' + (resume.basic_info?.target_position || '未指定目标岗位') +
+                    '</p>' +
+                  '</div>' +
+                  '<div class="flex flex-col items-end gap-2">' +
+                    '<span class="text-sm text-gray-400">v' + (resume.version || 1) + '</span>' +
+                    (resume.version_tag ? '<span class="px-2 py-1 text-xs bg-white rounded-full">' + resume.version_tag + '</span>' : '') +
+                  '</div>' +
+                '</div>' +
+                // 能力标签
+                '<div class="grid grid-cols-2 md:grid-cols-4 gap-3">' +
+                  '<div class="bg-white/70 rounded-lg p-3">' +
+                    '<p class="text-xs text-gray-500 mb-1">行业</p>' +
+                    '<p class="text-sm font-medium">' + (resume.ability_tags?.industry?.join('、') || '-') + '</p>' +
+                  '</div>' +
+                  '<div class="bg-white/70 rounded-lg p-3">' +
+                    '<p class="text-xs text-gray-500 mb-1">技术</p>' +
+                    '<p class="text-sm font-medium">' + (resume.ability_tags?.technology?.join('、') || '-') + '</p>' +
+                  '</div>' +
+                  '<div class="bg-white/70 rounded-lg p-3">' +
+                    '<p class="text-xs text-gray-500 mb-1">产品</p>' +
+                    '<p class="text-sm font-medium">' + (resume.ability_tags?.product?.join('、') || '-') + '</p>' +
+                  '</div>' +
+                  '<div class="bg-white/70 rounded-lg p-3">' +
+                    '<p class="text-xs text-gray-500 mb-1">能力</p>' +
+                    '<p class="text-sm font-medium">' + (resume.ability_tags?.capability?.join('、') || '-') + '</p>' +
+                  '</div>' +
+                '</div>' +
+                // 操作按钮
+                '<div class="flex flex-wrap gap-3 mt-4">' +
+                  '<a href="/resume/' + resumeId + '/versions" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">' +
+                    '<i class="fas fa-history mr-1"></i>版本历史' +
+                  '</a>' +
+                  '<a href="/jobs" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">' +
+                    '<i class="fas fa-search mr-1"></i>去匹配岗位' +
+                  '</a>' +
+                '</div>' +
+              '</div>' +
+              
+              // 教育背景
+              '<div class="border border-gray-200 rounded-xl p-6">' +
+                '<h2 class="text-lg font-semibold mb-4"><i class="fas fa-graduation-cap text-blue-500 mr-2"></i>教育背景</h2>' +
+                '<div class="space-y-3">' +
+                  (resume.education?.length > 0 ? resume.education.map(function(edu) {
+                    return '<div class="flex justify-between items-start">' +
+                      '<div>' +
+                        '<p class="font-medium">' + edu.school + '</p>' +
+                        '<p class="text-sm text-gray-500">' + edu.major + ' · ' + edu.degree + '</p>' +
+                      '</div>' +
+                      '<span class="text-sm text-gray-400">' + edu.duration + '</span>' +
+                    '</div>';
+                  }).join('') : '<p class="text-gray-500 text-sm">暂无教育背景</p>') +
+                '</div>' +
+              '</div>' +
+              
+              // 工作经历
+              '<div class="border border-gray-200 rounded-xl p-6">' +
+                '<h2 class="text-lg font-semibold mb-4"><i class="fas fa-briefcase text-green-500 mr-2"></i>工作经历</h2>' +
+                '<div class="space-y-4">' +
+                  (resume.work_experience?.length > 0 ? resume.work_experience.map(function(exp) {
+                    return '<div class="border-l-2 border-green-200 pl-4">' +
+                      '<div class="flex justify-between items-start mb-1">' +
+                        '<div>' +
+                          '<p class="font-medium">' + exp.position + '</p>' +
+                          '<p class="text-sm text-gray-500">' + exp.company + '</p>' +
+                        '</div>' +
+                        '<span class="text-sm text-gray-400">' + exp.duration + '</span>' +
+                      '</div>' +
+                      '<p class="text-sm text-gray-600 mt-2">' + (exp.description || '') + '</p>' +
+                    '</div>';
+                  }).join('') : '<p class="text-gray-500 text-sm">暂无工作经历</p>') +
+                '</div>' +
+              '</div>' +
+              
+              // 项目经历
+              '<div class="border border-gray-200 rounded-xl p-6">' +
+                '<h2 class="text-lg font-semibold mb-4"><i class="fas fa-project-diagram text-purple-500 mr-2"></i>项目经历</h2>' +
+                '<div class="space-y-4">' +
+                  (resume.projects?.length > 0 ? resume.projects.map(function(proj) {
+                    return '<div class="border-l-2 border-purple-200 pl-4">' +
+                      '<div class="flex justify-between items-start mb-1">' +
+                        '<div>' +
+                          '<p class="font-medium">' + proj.name + '</p>' +
+                          '<p class="text-sm text-gray-500">' + proj.role + '</p>' +
+                        '</div>' +
+                        '<span class="text-sm text-gray-400">' + proj.duration + '</span>' +
+                      '</div>' +
+                      '<p class="text-sm text-gray-600 mt-2">' + (proj.description || '') + '</p>' +
+                      (proj.achievements?.length > 0 ? 
+                        '<div class="mt-2"><span class="text-xs text-green-600">成果: </span><span class="text-xs text-gray-600">' + proj.achievements.join('、') + '</span></div>' : '') +
+                      (proj.tech_stack?.length > 0 ?
+                        '<div class="mt-1"><span class="text-xs text-blue-600">技术: </span><span class="text-xs text-gray-600">' + proj.tech_stack.join('、') + '</span></div>' : '') +
+                    '</div>';
+                  }).join('') : '<p class="text-gray-500 text-sm">暂无项目经历</p>') +
+                '</div>' +
+              '</div>' +
+              
+              // 技能
+              '<div class="border border-gray-200 rounded-xl p-6">' +
+                '<h2 class="text-lg font-semibold mb-4"><i class="fas fa-cogs text-yellow-500 mr-2"></i>专业技能</h2>' +
+                '<div class="flex flex-wrap gap-2">' +
+                  (resume.skills?.length > 0 ? resume.skills.map(function(skill) {
+                    return '<span class="px-3 py-1 bg-gray-100 text-gray-700 rounded-full text-sm">' + skill + '</span>';
+                  }).join('') : '<p class="text-gray-500 text-sm">暂无技能</p>') +
+                '</div>' +
+              '</div>';
+          });
+        `
+      }} />
+    </div>,
+    { title: '简历详情 - Job Copilot' }
+  )
+})
+
+// 简历版本历史页
+app.get('/resume/:id/versions', (c) => {
+  const resumeId = c.req.param('id')
+  
+  return c.render(
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/" class="flex items-center gap-2 font-bold text-lg">
+              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
+                <i class="fas fa-robot"></i>
+              </span>
+              <span class="hidden sm:inline">Job Copilot</span>
+            </a>
+            <nav class="flex items-center gap-1">
+              <a href="/resumes" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-folder-open mr-1.5"></i><span class="hidden sm:inline">简历库</span>
+              </a>
+            </nav>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 max-w-4xl mx-auto px-4 py-8 w-full">
+        {/* 面包屑 */}
+        <nav class="flex items-center gap-2 text-sm text-gray-500 mb-6">
+          <a href="/" class="hover:text-gray-700"><i class="fas fa-home"></i></a>
+          <i class="fas fa-chevron-right text-xs text-gray-300"></i>
+          <a href="/resumes" class="hover:text-gray-700">简历库</a>
+          <i class="fas fa-chevron-right text-xs text-gray-300"></i>
+          <a href={`/resume/${resumeId}`} id="resume-link" class="hover:text-gray-700">简历详情</a>
+          <i class="fas fa-chevron-right text-xs text-gray-300"></i>
+          <span class="text-gray-900 font-medium">版本历史</span>
+        </nav>
+
+        {/* 标题 */}
+        <div class="mb-6">
+          <h1 class="text-2xl font-bold">版本历史</h1>
+          <p id="versions-count" class="text-sm text-gray-500 mt-1">共 0 个版本</p>
+        </div>
+
+        {/* 版本列表 */}
+        <div id="versions-list" class="space-y-4">
+          {/* 加载状态 */}
+          <div class="text-center py-12">
+            <i class="fas fa-spinner loading-spinner text-3xl text-gray-400 mb-4"></i>
+            <p class="text-gray-500">加载中...</p>
+          </div>
+        </div>
+      </main>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            var resumeId = '${resumeId}';
+            var versionsList = document.getElementById('versions-list');
+            var versionsCount = document.getElementById('versions-count');
+            var resumeLink = document.getElementById('resume-link');
+            
+            var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+            var versions = JSON.parse(localStorage.getItem('jobcopilot_resume_versions') || '[]');
+            var jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+            
+            var resume = resumes.find(function(r) { return r.id === resumeId; });
+            if (resume) {
+              resumeLink.textContent = resume.name || resume.basic_info?.name || '简历详情';
+            }
+            
+            var resumeVersions = versions.filter(function(v) { return v.resume_id === resumeId; });
+            resumeVersions.sort(function(a, b) { return b.version - a.version; });
+            
+            versionsCount.textContent = '共 ' + resumeVersions.length + ' 个版本';
+            
+            if (resumeVersions.length === 0) {
+              versionsList.innerHTML = '<div class="text-center py-12 bg-gray-50 rounded-xl">' +
+                '<i class="fas fa-history text-3xl text-gray-300 mb-4"></i>' +
+                '<p class="text-gray-500">暂无版本记录</p>' +
+              '</div>';
+              return;
+            }
+            
+            function formatDate(dateStr) {
+              if (!dateStr) return '';
+              var date = new Date(dateStr);
+              return date.toLocaleString('zh-CN', { 
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+              });
+            }
+            
+            function getJobTitle(jobId) {
+              if (!jobId) return null;
+              var job = jobs.find(function(j) { return j.id === jobId; });
+              return job ? job.title : null;
+            }
+            
+            versionsList.innerHTML = resumeVersions.map(function(version, index) {
+              var isLatest = index === 0;
+              var linkedJob = getJobTitle(version.linked_jd_id);
+              var createdByText = {
+                'manual': '手动保存',
+                'auto': '自动保存',
+                'agent': 'AI生成'
+              }[version.created_by] || '未知';
+              
+              return '<div class="border border-gray-200 rounded-xl p-4 ' + (isLatest ? 'border-blue-300 bg-blue-50/30' : '') + '">' +
+                '<div class="flex items-start justify-between">' +
+                  '<div class="flex-1">' +
+                    '<div class="flex items-center gap-2 mb-2">' +
+                      '<span class="font-semibold">v' + version.version + '</span>' +
+                      (isLatest ? '<span class="px-2 py-0.5 text-xs bg-blue-100 text-blue-600 rounded-full">最新</span>' : '') +
+                      (version.version_tag ? '<span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-600 rounded-full">' + version.version_tag + '</span>' : '') +
+                      '<span class="px-2 py-0.5 text-xs bg-gray-100 text-gray-500 rounded-full">' + createdByText + '</span>' +
+                    '</div>' +
+                    (version.changes_summary ? '<p class="text-sm text-gray-600 mb-2">' + version.changes_summary + '</p>' : '') +
+                    (linkedJob ? 
+                      '<p class="text-xs text-purple-600"><i class="fas fa-link mr-1"></i>定向岗位: ' + linkedJob + '</p>' : '') +
+                  '</div>' +
+                  '<div class="text-right">' +
+                    '<p class="text-xs text-gray-400">' + formatDate(version.created_at) + '</p>' +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+            }).join('');
+          });
+        `
+      }} />
+    </div>,
+    { title: '版本历史 - Job Copilot' }
   )
 })
 
@@ -4760,6 +5368,9 @@ app.route('/api/jobs', jobRoutes)
 // 挂载简历相关路由
 app.route('/api/resume', resumeRoutes)
 
+// JD 定向简历生成 API
+app.post('/api/job/:jobId/generate-resume', generateTargetedResume)
+
 // 挂载匹配相关路由
 app.route('/api/job', matchRoutes)
 
@@ -4777,8 +5388,8 @@ app.get('/api/health', (c) => {
   return c.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '0.7.0',
-    phase: 'Phase 6 - 模型评测与优化',
+    version: '0.8.0',
+    phase: 'Phase 7 - 简历库增强',
   })
 })
 

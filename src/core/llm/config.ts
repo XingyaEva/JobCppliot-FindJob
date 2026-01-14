@@ -185,6 +185,17 @@ export const AGENT_CONFIGS: Record<string, AgentLLMConfig> = {
     temperature: 0.3,
     maxTokens: 1024,
   },
+  
+  // ==================== Phase 7 新增 ====================
+  
+  /** 简历版本生成（JD定向简历） */
+  'resume-version': {
+    provider: 'dashscope',
+    model: MODELS.QWEN_PLUS,
+    temperature: 0.7,
+    maxTokens: 8192,
+    jsonMode: true,
+  },
 };
 
 /**

@@ -126,9 +126,25 @@ export interface AbilityTags {
   capability: string[];
 }
 
-/** 简历数据 */
+/** 简历内容（可独立存储的结构化内容） */
+export interface ResumeContent {
+  basic_info: {
+    name: string;
+    contact: string;
+    target_position: string;
+  };
+  education: Education[];
+  work_experience: WorkExperience[];
+  projects: Project[];
+  skills: string[];
+  ability_tags: AbilityTags;
+}
+
+/** 简历数据（扩展版 - 支持版本管理） */
 export interface Resume {
   id: string;
+  // 基础信息
+  name: string;                      // 简历名称（如"产品经理简历"）
   basic_info: {
     name: string;
     contact: string;
@@ -140,9 +156,45 @@ export interface Resume {
   skills: string[];
   ability_tags: AbilityTags;
   raw_content: string;
+  
+  // 版本管理字段
+  base_resume_id?: string;           // 基础版本ID（null表示主版本）
+  version: number;                   // 版本号
+  version_tag?: string;              // 版本标签（如"基础版"/"AI产品经理-保险"）
+  linked_jd_ids: string[];           // 关联的岗位ID列表
+  is_master: boolean;                // 是否为主版本
+  
+  // 状态
   status: 'pending' | 'processing' | 'completed' | 'error';
   created_at: string;
   updated_at: string;
+}
+
+/** 简历版本记录 */
+export interface ResumeVersion {
+  id: string;
+  resume_id: string;                 // 所属简历ID
+  version: number;                   // 版本号
+  version_tag?: string;              // 版本标签
+  content: ResumeContent;            // 简历内容快照
+  linked_jd_id?: string;             // 如果是JD定向版，关联的岗位ID
+  changes_summary?: string;          // AI生成的变更摘要
+  created_by: 'manual' | 'auto' | 'agent';  // 创建方式
+  created_at: string;
+}
+
+/** JD定向简历生成结果 */
+export interface JDTargetedResumeResult {
+  resume_id: string;
+  job_id: string;
+  suggestions: {
+    keyword_enhancements: string[];   // 关键词强化
+    experience_reorder: string[];     // 经历排序建议
+    content_adjustments: string[];    // 内容调整建议
+    weakened_items: string[];         // 弱化/删除建议
+  };
+  optimized_content: ResumeContent;   // 优化后的简历内容
+  match_improvement: string;          // 预估匹配度提升
 }
 
 // ==================== 匹配相关 ====================
