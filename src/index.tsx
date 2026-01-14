@@ -2359,68 +2359,48 @@ app.get('/resume', (c) => {
                 let result;
                 
                 if (selectedFile) {
-                  // 文件模式：使用 MinerU 直传
+                  // 文件模式：使用 MinerU（后端代理上传）
                   renderDAGNodes([
-                    { id: 'upload', name: '获取上传地址', status: 'running' },
-                    { id: 'transfer', name: '上传文件到 MinerU', status: 'pending' },
+                    { id: 'upload', name: '上传文件', status: 'running' },
                     { id: 'ocr', name: 'MinerU 文档解析', status: 'pending' },
                     { id: 'parse', name: '简历结构化', status: 'pending' },
                   ]);
 
-                  // 步骤1: 获取上传 URL
-                  const uploadUrlRes = await fetch('/api/resume/mineru/upload-url', {
+                  // 步骤1: 上传文件到后端，后端代理上传到 MinerU
+                  const formData = new FormData();
+                  formData.append('file', selectedFile);
+                  formData.append('isOcr', 'false');  // 非扫描件默认关闭 OCR
+                  
+                  const uploadRes = await fetch('/api/resume/mineru/upload', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                      fileName: selectedFile.name,
-                      isOcr: false  // 非扫描件默认关闭 OCR
-                    }),
+                    body: formData,
                   });
-                  const uploadUrlData = await uploadUrlRes.json();
+                  const uploadData = await uploadRes.json();
                   
-                  if (!uploadUrlData.success) {
-                    throw new Error(uploadUrlData.error || '获取上传地址失败');
+                  if (!uploadData.success) {
+                    throw new Error(uploadData.error || '文件上传失败');
                   }
                   
                   renderDAGNodes([
-                    { id: 'upload', name: '获取上传地址', status: 'completed' },
-                    { id: 'transfer', name: '上传文件到 MinerU', status: 'running' },
-                    { id: 'ocr', name: 'MinerU 文档解析', status: 'pending' },
-                    { id: 'parse', name: '简历结构化', status: 'pending' },
-                  ]);
-
-                  // 步骤2: 直传文件到 MinerU
-                  const uploadRes = await fetch(uploadUrlData.uploadUrl, {
-                    method: 'PUT',
-                    body: selectedFile,  // 直接上传文件
-                  });
-                  
-                  if (!uploadRes.ok) {
-                    throw new Error('文件上传失败: ' + uploadRes.status);
-                  }
-                  
-                  renderDAGNodes([
-                    { id: 'upload', name: '获取上传地址', status: 'completed' },
-                    { id: 'transfer', name: '上传文件到 MinerU', status: 'completed' },
+                    { id: 'upload', name: '上传文件', status: 'completed' },
                     { id: 'ocr', name: 'MinerU 文档解析', status: 'running' },
                     { id: 'parse', name: '简历结构化', status: 'pending' },
                   ]);
 
-                  // 步骤3: 等待 MinerU 解析完成并获取结构化结果
+                  // 步骤2: 等待 MinerU 解析完成并获取结构化结果
                   const parseRes = await fetch('/api/resume/mineru/parse', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                      batchId: uploadUrlData.batchId,
-                      fileName: selectedFile.name,
+                      batchId: uploadData.batchId,
+                      fileName: uploadData.fileName,
                     }),
                   });
                   result = await parseRes.json();
                   
                   if (result.success) {
                     renderDAGNodes([
-                      { id: 'upload', name: '获取上传地址', status: 'completed' },
-                      { id: 'transfer', name: '上传文件到 MinerU', status: 'completed' },
+                      { id: 'upload', name: '上传文件', status: 'completed' },
                       { id: 'ocr', name: 'MinerU 文档解析', status: 'completed' },
                       { id: 'parse', name: '简历结构化', status: 'completed' },
                     ]);

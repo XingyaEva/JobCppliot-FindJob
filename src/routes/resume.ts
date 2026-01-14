@@ -95,40 +95,66 @@ async function runResumeParseDAG(
 // ==================== MinerU 文档解析 API ====================
 
 /**
- * POST /api/resume/mineru/upload-url - 获取 MinerU 上传 URL
+ * POST /api/resume/mineru/upload - 上传文件到 MinerU（后端代理）
  * 
- * 前端直传流程第一步：获取上传 URL
+ * 方案 A：前端将文件传到后端，后端代理上传到 MinerU OSS
+ * 解决 CORS 跨域问题
  */
-resumeRoutes.post('/mineru/upload-url', async (c) => {
+resumeRoutes.post('/mineru/upload', async (c) => {
   try {
-    const body = await c.req.json();
-    const { fileName, isOcr } = body;
+    // 获取 multipart form data
+    const formData = await c.req.formData();
+    const file = formData.get('file') as File | null;
+    const isOcrStr = formData.get('isOcr') as string | null;
+    const isOcr = isOcrStr === 'true';
 
-    if (!fileName) {
-      return c.json({ success: false, error: '缺少 fileName 参数' }, 400);
+    if (!file) {
+      return c.json({ success: false, error: '缺少文件' }, 400);
     }
 
-    console.log(`[MinerU] 申请上传 URL，文件名: ${fileName}`);
+    const fileName = file.name;
+    console.log(`[MinerU] 开始处理文件: ${fileName}, 大小: ${file.size} bytes`);
 
-    const result = await getUploadUrlAndParse(fileName, {
-      isOcr: isOcr ?? false,
+    // 步骤1: 获取上传 URL
+    console.log(`[MinerU] 步骤1: 申请上传 URL...`);
+    const urlResult = await getUploadUrlAndParse(fileName, {
+      isOcr: isOcr,
       enableTable: true,
       modelVersion: 'vlm',
     });
 
-    if (!result.success) {
-      return c.json({ success: false, error: result.error }, 500);
+    if (!urlResult.success || !urlResult.uploadUrl || !urlResult.batchId) {
+      return c.json({ success: false, error: urlResult.error || '获取上传URL失败' }, 500);
     }
 
-    console.log(`[MinerU] 上传 URL 获取成功，batch_id: ${result.batchId}`);
+    console.log(`[MinerU] 上传 URL 获取成功，batch_id: ${urlResult.batchId}`);
 
+    // 步骤2: 代理上传文件到 MinerU OSS
+    console.log(`[MinerU] 步骤2: 上传文件到 MinerU OSS...`);
+    const fileBuffer = await file.arrayBuffer();
+    
+    const uploadRes = await fetch(urlResult.uploadUrl, {
+      method: 'PUT',
+      body: fileBuffer,
+    });
+
+    if (!uploadRes.ok) {
+      const errorText = await uploadRes.text();
+      console.error(`[MinerU] 上传失败: ${uploadRes.status} - ${errorText}`);
+      return c.json({ success: false, error: `文件上传失败: ${uploadRes.status}` }, 500);
+    }
+
+    console.log(`[MinerU] 文件上传成功，等待解析...`);
+
+    // 返回 batchId，让前端轮询解析结果
     return c.json({
       success: true,
-      uploadUrl: result.uploadUrl,
-      batchId: result.batchId,
+      batchId: urlResult.batchId,
+      fileName: fileName,
+      message: '文件上传成功，请轮询解析结果',
     });
   } catch (error) {
-    console.error('[MinerU] 获取上传 URL 失败:', error);
+    console.error('[MinerU] 上传处理失败:', error);
     return c.json({
       success: false,
       error: error instanceof Error ? error.message : '未知错误',
@@ -137,9 +163,9 @@ resumeRoutes.post('/mineru/upload-url', async (c) => {
 });
 
 /**
- * POST /api/resume/mineru/parse - 等待 MinerU 解析完成并处理结果
+ * POST /api/resume/mineru/parse - 轮询 MinerU 解析结果并结构化
  * 
- * 前端直传流程第二步：轮询等待解析完成，然后进行简历结构化
+ * 在文件上传成功后调用，等待解析完成
  */
 resumeRoutes.post('/mineru/parse', async (c) => {
   try {
@@ -150,7 +176,7 @@ resumeRoutes.post('/mineru/parse', async (c) => {
       return c.json({ success: false, error: '缺少 batchId 或 fileName 参数' }, 400);
     }
 
-    console.log(`[MinerU] 开始轮询解析结果，batch_id: ${batchId}, 文件: ${fileName}`);
+    console.log(`[MinerU] 步骤3: 轮询解析结果，batch_id: ${batchId}, 文件: ${fileName}`);
 
     // 等待 MinerU 解析完成
     const mineruResult = await waitForBatchCompletion(batchId, fileName, (progress) => {
@@ -161,7 +187,7 @@ resumeRoutes.post('/mineru/parse', async (c) => {
       return c.json({ success: false, error: mineruResult.error }, 500);
     }
 
-    console.log(`[MinerU] 文档解析完成，开始结构化处理...`);
+    console.log(`[MinerU] 步骤4: 文档解析完成，开始结构化处理...`);
 
     // 使用解析后的 Markdown 进行简历结构化
     const cleanedText = mineruResult.markdown || '';
