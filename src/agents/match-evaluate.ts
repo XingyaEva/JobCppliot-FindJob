@@ -210,10 +210,11 @@ ${input.resume.skills.join('、') || '无'}
 
     inputMessage = SYSTEM_PROMPT + '\n' + userMessage;
 
+    // 使用 match-evaluate Agent 配置（支持实验配置覆盖）
     const response = await chat(
       SYSTEM_PROMPT,
       userMessage,
-      { model, jsonMode: true }
+      { agentId: 'match-evaluate', jsonMode: true }
     );
     
     outputContent = response;

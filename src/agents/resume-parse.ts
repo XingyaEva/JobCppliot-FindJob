@@ -62,10 +62,11 @@ export async function executeResumeParse(
   try {
     console.log('[简历解析] 开始提取结构化信息');
 
+    // 使用 resume-parse Agent 配置
     const response = await chat(
       SYSTEM_PROMPT,
       `请将以下简历文本提取为结构化JSON，并生成能力标签：\n\n${input.cleanedText}`,
-      { model: MODELS.MEDIUM, jsonMode: true }
+      { agentId: 'resume-parse', jsonMode: true }
     );
 
     // 解析JSON响应

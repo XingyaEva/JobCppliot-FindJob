@@ -252,10 +252,11 @@ ${input.resume.skills.join('、') || '无'}
 - 公司文化：${input.company_analysis.interview_insights.company_culture}
 - 面试建议：${input.company_analysis.interview_insights.interview_tips.join('；')}`;
 
+    // 使用 interview-prep Agent 配置（启用联网搜索）
     const response = await chat(
       SYSTEM_PROMPT,
       userMessage,
-      { model: MODELS.HIGH, jsonMode: true }
+      { agentId: 'interview-prep', jsonMode: true }
     );
 
     // 解析JSON响应

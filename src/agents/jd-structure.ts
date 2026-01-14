@@ -26,10 +26,11 @@ export async function executeJDStructure(
   try {
     console.log('[JD结构化] 开始提取结构化信息');
 
+    // 使用 jd-structure Agent 配置
     const response = await chat(
       SYSTEM_PROMPT,
       `请将以下JD文本提取为结构化JSON：\n\n${input.cleanedText}`,
-      { model: MODELS.MEDIUM, jsonMode: true }
+      { agentId: 'jd-structure', jsonMode: true }
     );
 
     // 解析JSON响应

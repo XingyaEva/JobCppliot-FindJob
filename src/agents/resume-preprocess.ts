@@ -76,11 +76,12 @@ export async function executeResumePreprocess(
         : 'image/png';
       const imageUrl = `data:${mimeType};base64,${input.fileData}`;
 
+      // 使用 resume-parse-image Agent 配置
       cleanedText = await chatWithImage(
         IMAGE_SYSTEM_PROMPT,
         '请识别这份简历中的所有内容。',
         imageUrl,
-        { model: MODELS.VISION }
+        { agentId: 'resume-parse-image' }
       );
     } else {
       // 文本模式：使用 qwen-turbo 进行清洗
@@ -89,10 +90,11 @@ export async function executeResumePreprocess(
       }
 
       console.log('[简历预处理] 使用文本清洗模式');
+      // 使用 jd-preprocess Agent 配置 (快速文本清洗)
       cleanedText = await chat(
         TEXT_SYSTEM_PROMPT,
         `请清洗以下简历文本：\n\n${input.content}`,
-        { model: MODELS.FAST }
+        { agentId: 'jd-preprocess' }
       );
     }
 

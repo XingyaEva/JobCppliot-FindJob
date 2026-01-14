@@ -168,10 +168,11 @@ ${input.structured_jd.preferred.length > 0 ? input.structured_jd.preferred.map((
 - B3 产品经验：${input.b_analysis.B3_product_experience.product_types.join('、')}
 - B4 核心能力：${input.b_analysis.B4_capability_requirement.capabilities.map(c => c.name).join('、')}`;
 
+    // 使用 company-analyze Agent 配置（启用联网搜索获取公司信息）
     const response = await chat(
       SYSTEM_PROMPT,
       userMessage,
-      { model: MODELS.HIGH, jsonMode: true }
+      { agentId: 'company-analyze', jsonMode: true }
     );
 
     // 解析JSON响应

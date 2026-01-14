@@ -56,10 +56,11 @@ ${input.structuredJD.preferred.length > 0
 ## 原始JD文本（供参考）
 ${input.rawText.substring(0, 2000)}`;
 
+    // 使用 jd-analysis-b Agent 配置
     const response = await chat(
       SYSTEM_PROMPT,
       userMessage,
-      { model: MODELS.HIGH, jsonMode: true }
+      { agentId: 'jd-analysis-b', jsonMode: true }
     );
 
     // 解析JSON响应

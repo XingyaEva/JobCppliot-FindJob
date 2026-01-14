@@ -165,10 +165,11 @@ ${input.user_suggestions}
 
 请根据以上用户建议，重点调整相关内容。` : ''}`;
 
+    // 使用 resume-optimize Agent 配置（启用联网搜索获取行业趋势）
     const response = await chat(
       SYSTEM_PROMPT,
       userMessage,
-      { model: MODELS.HIGH, jsonMode: true }
+      { agentId: 'resume-optimize', jsonMode: true }
     );
 
     // 解析JSON响应

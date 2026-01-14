@@ -46,11 +46,12 @@ export async function executeJDPreprocess(
       }
 
       console.log('[JD预处理] 使用图片识别模式');
+      // 使用 jd-preprocess-image Agent 配置
       cleanedText = await chatWithImage(
         IMAGE_SYSTEM_PROMPT,
         IMAGE_USER_PROMPT,
         input.imageUrl,
-        { model: MODELS.VISION }
+        { agentId: 'jd-preprocess-image' }
       );
     } else {
       // 文本模式：使用 qwen-turbo 进行清洗
@@ -59,10 +60,11 @@ export async function executeJDPreprocess(
       }
 
       console.log('[JD预处理] 使用文本清洗模式');
+      // 使用 jd-preprocess Agent 配置
       cleanedText = await chat(
         TEXT_SYSTEM_PROMPT,
         `请清洗以下JD文本：\n\n${input.content}`,
-        { model: MODELS.FAST }
+        { agentId: 'jd-preprocess' }
       );
     }
 

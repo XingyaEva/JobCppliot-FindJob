@@ -1,45 +1,60 @@
 /**
- * Vectorengine API 客户端
+ * API 客户端（兼容层）
+ * 
+ * 保持原有接口不变，底层使用新的 LLM 模块
+ * 这样现有 Agent 代码无需修改即可使用双通道系统
  */
 
-// API 配置
-const API_CONFIG = {
-  baseUrl: 'https://api.vectorengine.ai',
-  apiKey: 'sk-3LLX8OkNZqTFKwCqxEXnMjMfgJmNEopXTn5tWP99f8l6t533',
-  defaultModel: 'gpt-4o',
-  timeout: 120000, // 2分钟超时
-};
+import { 
+  callLLM, 
+  callVisionLLM, 
+  callLLMWithRetry,
+  getAgentConfig,
+  MODELS as LLM_MODELS,
+} from './llm';
+import type { ChatMessage as LLMChatMessage, APIProvider } from './llm/types';
 
-// 模型配置
+// ==================== 兼容性导出 ====================
+
+// 模型配置（兼容旧代码）
 export const MODELS = {
-  // 图片理解
-  VISION: 'gpt-4o',
-  // 快速文本处理 (使用qwen-turbo替代qwen-mt-turbo)
-  FAST: 'qwen-turbo',
+  // 图片理解 - 使用百炼视觉模型
+  VISION: LLM_MODELS.QWEN_VL_MAX,
+  // 快速文本处理
+  FAST: LLM_MODELS.QWEN_TURBO,
   // 中等复杂度
-  MEDIUM: 'qwen-max',
+  MEDIUM: LLM_MODELS.QWEN_PLUS,
   // 高质量生成
-  HIGH: 'gpt-4.1',
+  HIGH: LLM_MODELS.QWEN_MAX,
   // DeepSeek (高性价比)
   DEEPSEEK: 'deepseek-v3',
 } as const;
 
-// 模型别名（用于Agent选择）
+// Agent 模型映射（兼容旧代码）
+// 实际模型由 AGENT_CONFIGS 控制，这里只是保持接口一致
 export const AGENT_MODELS = {
-  'jd-preprocess-image': MODELS.VISION,
-  'jd-preprocess-text': MODELS.FAST,
-  'jd-structure': MODELS.MEDIUM,
-  'jd-analysis-a': MODELS.MEDIUM,
-  'jd-analysis-b': MODELS.HIGH,
-  'resume-parse': MODELS.MEDIUM,
-  'match-evaluate': MODELS.HIGH,
-  'company-analyze': MODELS.HIGH,
-  'resume-optimize': MODELS.HIGH,
-  'interview-prep': MODELS.HIGH,
-  'router': MODELS.FAST,
+  'jd-preprocess-image': LLM_MODELS.QWEN_VL_MAX,
+  'jd-preprocess-text': LLM_MODELS.QWEN_TURBO,
+  'jd-structure': LLM_MODELS.QWEN_PLUS,
+  'jd-analysis-a': LLM_MODELS.QWEN_MAX,
+  'jd-analysis-b': LLM_MODELS.QWEN_MAX,
+  'resume-parse': LLM_MODELS.QWEN_PLUS,
+  'match-evaluate': LLM_MODELS.QWEN_MAX,
+  'company-analyze': LLM_MODELS.QWEN_PLUS,
+  'resume-optimize': LLM_MODELS.QWEN_PLUS,
+  'interview-prep': LLM_MODELS.QWEN_PLUS,
+  'router': LLM_MODELS.QWEN_TURBO,
 } as const;
 
-/** 聊天消息 */
+// API 配置（兼容旧代码调试）
+export const API_CONFIG = {
+  baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  apiKey: '[已迁移到 LLM 模块]',
+  defaultModel: LLM_MODELS.QWEN_PLUS,
+  timeout: 120000,
+};
+
+/** 聊天消息（兼容旧类型） */
 export interface ChatMessage {
   role: 'system' | 'user' | 'assistant';
   content: string | Array<{
@@ -49,7 +64,7 @@ export interface ChatMessage {
   }>;
 }
 
-/** API响应 */
+/** API响应（兼容旧类型） */
 export interface ChatResponse {
   id: string;
   choices: Array<{
@@ -67,7 +82,26 @@ export interface ChatResponse {
 }
 
 /**
- * 调用 Vectorengine Chat API
+ * 根据模型名称推断 Agent ID 和 Provider
+ */
+function inferProviderFromModel(model?: string): { provider?: APIProvider; agentId?: string } {
+  if (!model) return {};
+  
+  // VectorEngine 特有模型
+  if (model.startsWith('gpt-') || model.startsWith('deepseek-') || model.startsWith('gemini-')) {
+    return { provider: 'vectorengine' };
+  }
+  
+  // 百炼模型
+  if (model.startsWith('qwen') || model.startsWith('qwq')) {
+    return { provider: 'dashscope' };
+  }
+  
+  return {};
+}
+
+/**
+ * 调用 Chat API（兼容旧接口）
  */
 export async function chatCompletion(
   messages: ChatMessage[],
@@ -78,43 +112,46 @@ export async function chatCompletion(
     response_format?: { type: 'json_object' | 'text' };
   } = {}
 ): Promise<ChatResponse> {
-  const {
-    model = API_CONFIG.defaultModel,
-    temperature = 0.7,
-    max_tokens = 4096,
-    response_format,
-  } = options;
+  const { model, temperature, max_tokens, response_format } = options;
+  const { provider } = inferProviderFromModel(model);
 
-  const requestBody: any = {
+  // 转换消息格式
+  const llmMessages: LLMChatMessage[] = messages.map(msg => ({
+    role: msg.role,
+    content: msg.content,
+  }));
+
+  const response = await callLLM({
+    messages: llmMessages,
+    provider,
     model,
-    messages,
     temperature,
-    max_tokens,
-  };
-
-  if (response_format) {
-    requestBody.response_format = response_format;
-  }
-
-  const response = await fetch(`${API_CONFIG.baseUrl}/v1/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${API_CONFIG.apiKey}`,
-    },
-    body: JSON.stringify(requestBody),
+    maxTokens: max_tokens,
+    jsonMode: response_format?.type === 'json_object',
   });
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`API调用失败: ${response.status} - ${errorText}`);
-  }
-
-  return response.json();
+  // 转换为旧格式响应
+  return {
+    id: `chat-${Date.now()}`,
+    choices: [{
+      message: {
+        role: 'assistant',
+        content: response.content,
+      },
+      finish_reason: 'stop',
+    }],
+    usage: response.usage ? {
+      prompt_tokens: response.usage.promptTokens,
+      completion_tokens: response.usage.completionTokens,
+      total_tokens: response.usage.totalTokens,
+    } : undefined,
+  };
 }
 
 /**
- * 简化的文本对话
+ * 简化的文本对话（兼容旧接口）
+ * 
+ * 优先使用 Agent 配置，支持手动指定模型覆盖
  */
 export async function chat(
   systemPrompt: string,
@@ -122,25 +159,30 @@ export async function chat(
   options: {
     model?: string;
     jsonMode?: boolean;
+    agentId?: string;  // 新增：支持直接指定 Agent
   } = {}
 ): Promise<string> {
-  const { model, jsonMode = false } = options;
+  const { model, jsonMode = false, agentId } = options;
+  const { provider } = inferProviderFromModel(model);
 
-  const messages: ChatMessage[] = [
+  const messages: LLMChatMessage[] = [
     { role: 'system', content: systemPrompt },
     { role: 'user', content: userMessage },
   ];
 
-  const response = await chatCompletion(messages, {
+  const response = await callLLM({
+    messages,
+    agentId,
+    provider,
     model,
-    response_format: jsonMode ? { type: 'json_object' } : undefined,
+    jsonMode,
   });
 
-  return response.choices[0]?.message?.content || '';
+  return response.content;
 }
 
 /**
- * 图片理解对话
+ * 图片理解对话（兼容旧接口）
  */
 export async function chatWithImage(
   systemPrompt: string,
@@ -149,27 +191,20 @@ export async function chatWithImage(
   options: {
     model?: string;
     jsonMode?: boolean;
+    agentId?: string;  // 新增：支持直接指定 Agent
   } = {}
 ): Promise<string> {
-  const { model = MODELS.VISION, jsonMode = false } = options;
+  const { model, jsonMode = false, agentId } = options;
 
-  const messages: ChatMessage[] = [
-    { role: 'system', content: systemPrompt },
-    {
-      role: 'user',
-      content: [
-        { type: 'text', text: userText },
-        { type: 'image_url', image_url: { url: imageUrl } },
-      ],
-    },
-  ];
-
-  const response = await chatCompletion(messages, {
-    model,
-    response_format: jsonMode ? { type: 'json_object' } : undefined,
+  const response = await callVisionLLM({
+    systemPrompt,
+    userPrompt: userText,
+    imageUrl,
+    agentId: agentId || 'resume-parse-image',
+    jsonMode,
   });
 
-  return response.choices[0]?.message?.content || '';
+  return response.content;
 }
 
 /**
@@ -197,7 +232,7 @@ export function parseJsonResponse<T>(content: string): T {
 }
 
 /**
- * 带重试的API调用
+ * 带重试的API调用（兼容旧接口）
  */
 export async function chatWithRetry(
   systemPrompt: string,
@@ -206,28 +241,67 @@ export async function chatWithRetry(
     model?: string;
     jsonMode?: boolean;
     maxRetries?: number;
+    agentId?: string;  // 新增：支持直接指定 Agent
   } = {}
 ): Promise<string> {
-  const { maxRetries = 3, ...chatOptions } = options;
-  
-  let lastError: Error | null = null;
-  
-  for (let i = 0; i < maxRetries; i++) {
-    try {
-      return await chat(systemPrompt, userMessage, chatOptions);
-    } catch (error) {
-      lastError = error as Error;
-      console.warn(`API调用失败 (尝试 ${i + 1}/${maxRetries}):`, error);
-      
-      // 等待后重试
-      if (i < maxRetries - 1) {
-        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-      }
-    }
-  }
-  
-  throw lastError || new Error('API调用失败');
+  const { maxRetries = 3, model, jsonMode, agentId } = options;
+  const { provider } = inferProviderFromModel(model);
+
+  const messages: LLMChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userMessage },
+  ];
+
+  const response = await callLLMWithRetry({
+    messages,
+    agentId,
+    provider,
+    model,
+    jsonMode,
+  }, maxRetries);
+
+  return response.content;
 }
 
-// 导出配置（用于调试）
-export { API_CONFIG };
+// ==================== 新增：便捷函数 ====================
+
+/**
+ * 按 Agent 配置调用（推荐使用）
+ * 
+ * @example
+ * const result = await chatByAgent('jd-structure', systemPrompt, userMessage);
+ */
+export async function chatByAgent(
+  agentId: string,
+  systemPrompt: string,
+  userMessage: string
+): Promise<string> {
+  return chat(systemPrompt, userMessage, { agentId });
+}
+
+/**
+ * 带联网搜索的对话
+ * 
+ * @example
+ * const result = await chatWithSearch('interview-prep', systemPrompt, userMessage);
+ */
+export async function chatWithSearch(
+  agentId: string,
+  systemPrompt: string,
+  userMessage: string,
+  searchStrategy: 'turbo' | 'max' | 'agent' = 'max'
+): Promise<string> {
+  const messages: LLMChatMessage[] = [
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userMessage },
+  ];
+
+  const response = await callLLM({
+    messages,
+    agentId,
+    enableSearch: true,
+    searchStrategy,
+  });
+
+  return response.content;
+}
