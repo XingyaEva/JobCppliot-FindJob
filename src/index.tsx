@@ -2271,12 +2271,12 @@ app.get('/resume', (c) => {
               });
             }
 
-            // 查看详情（暂时显示原始内容）
+            // 查看详情 - 跳转到详情页
             if (viewDetailBtn) {
               viewDetailBtn.addEventListener('click', function() {
                 const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
                 if (resumes.length > 0) {
-                  alert('简历详情页开发中...\\n\\n能力标签：\\n- 行业: ' + (resumes[0].ability_tags?.industry?.join(', ') || '无') + '\\n- 技术: ' + (resumes[0].ability_tags?.technology?.join(', ') || '无') + '\\n- 产品: ' + (resumes[0].ability_tags?.product?.join(', ') || '无') + '\\n- 能力: ' + (resumes[0].ability_tags?.capability?.join(', ') || '无'));
+                  window.location.href = '/resume/' + resumes[0].id;
                 }
               });
             }
@@ -2369,7 +2369,7 @@ app.get('/resume', (c) => {
                   // 步骤1: 上传文件到后端，后端代理上传到 MinerU
                   const formData = new FormData();
                   formData.append('file', selectedFile);
-                  formData.append('isOcr', 'false');  // 非扫描件默认关闭 OCR
+                  formData.append('isOcr', 'true');  // 开启 OCR 以解析简历头部复杂布局（姓名、照片、联系方式区域）
                   
                   const uploadRes = await fetch('/api/resume/mineru/upload', {
                     method: 'POST',
