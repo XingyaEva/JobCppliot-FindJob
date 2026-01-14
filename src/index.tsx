@@ -2252,6 +2252,7 @@ app.get('/resume', (c) => {
 
             let selectedFile = null;
             let fileDataUrl = null;
+            let isParsing = false; // 防止重复提交
 
             // 检查是否已有简历
             const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
@@ -2356,6 +2357,13 @@ app.get('/resume', (c) => {
                 alert('请上传简历文件或粘贴简历文本');
                 return;
               }
+              
+              // 防止重复提交
+              if (isParsing) {
+                console.log('[前端] 正在解析中，跳过重复请求');
+                return;
+              }
+              isParsing = true;
 
               parseBtn.disabled = true;
               parseBtn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-2"></i>解析中...';
@@ -2400,15 +2408,27 @@ app.get('/resume', (c) => {
                   ]);
 
                   // 步骤2: 等待 MinerU 解析完成并获取结构化结果
-                  const parseRes = await fetch('/api/resume/mineru/parse', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      batchId: uploadData.batchId,
-                      fileName: uploadData.fileName,
-                    }),
-                  });
-                  result = await parseRes.json();
+                  let parseRes;
+                  try {
+                    parseRes = await fetch('/api/resume/mineru/parse', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        batchId: uploadData.batchId,
+                        fileName: uploadData.fileName,
+                      }),
+                    });
+                    
+                    if (!parseRes.ok) {
+                      throw new Error('解析接口返回错误: ' + parseRes.status);
+                    }
+                    
+                    result = await parseRes.json();
+                  } catch (fetchError) {
+                    // 网络错误或超时
+                    console.error('[前端] 解析请求失败:', fetchError);
+                    throw new Error('网络请求失败，请检查网络连接后重试');
+                  }
                   
                   if (result.success) {
                     renderDAGNodes([
@@ -2457,6 +2477,7 @@ app.get('/resume', (c) => {
                     uploadSection.classList.add('hidden');
                     parseBtn.disabled = false;
                     parseBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>解析简历';
+                    isParsing = false; // 重置状态
                     // 清空输入
                     textInput.value = '';
                     selectedFile = null;
@@ -2469,11 +2490,21 @@ app.get('/resume', (c) => {
                 }
               } catch (error) {
                 console.error('解析失败:', error);
-                errorMessage.textContent = error.message || '解析失败，请重试';
+                
+                // 更友好的错误提示
+                let friendlyMessage = '解析失败，请重试';
+                if (error.message && error.message.includes('网络')) {
+                  friendlyMessage = '网络请求失败。可能原因：① 网络不稳定 ② 解析超时（简历较大）。建议：刷新页面后重试';
+                } else if (error.message) {
+                  friendlyMessage = error.message;
+                }
+                
+                errorMessage.textContent = friendlyMessage;
                 errorArea.classList.remove('hidden');
                 progressArea.classList.add('hidden');
                 parseBtn.disabled = false;
                 parseBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>解析简历';
+                isParsing = false; // 重置状态，允许重试
               }
             });
 
