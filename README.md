@@ -179,14 +179,48 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 - 卡片悬停效果：提升交互反馈
 - 滚动条美化：统一滚动条样式
 
-## 模型配置
+## 模型配置 - 双通道 LLM 架构
 
-| 用途 | 模型 | Agent |
-|------|------|-------|
-| 图片理解 | gpt-4o | JD预处理(图片)、简历预处理(文件) |
-| 快速文本 | qwen-turbo | JD预处理(文本)、简历预处理(文本) |
-| 中等复杂 | qwen-max | JD结构化、A维度分析、简历解析 |
-| 高质量生成 | gpt-4.1 | B维度分析、匹配评估、公司分析、面试准备、简历优化 |
+### API 通道
+
+| 通道 | 用途 | 优势 |
+|------|------|------|
+| **阿里云百炼** (dashscope) | 主通道 | 成本低 ~90%、国内稳定、支持联网搜索 |
+| **VectorEngine** | 辅助/备用 | GPT/Gemini 模型支持 |
+
+### Agent 模型映射
+
+| Agent | API 通道 | 模型 | 联网搜索 |
+|-------|----------|------|----------|
+| jd-preprocess | dashscope | qwen-turbo | ❌ |
+| jd-preprocess-image | dashscope | qwen-vl-max | ❌ |
+| jd-structure | dashscope | qwen-plus | ❌ |
+| jd-analysis-a | dashscope | qwen-max | ❌ |
+| jd-analysis-b | dashscope | qwen-max | ❌ |
+| resume-parse | dashscope | qwen-plus | ❌ |
+| resume-parse-image | dashscope | qwen-vl-max | ❌ |
+| match-evaluate | dashscope | qwen-max | ❌ |
+| **interview-prep** | dashscope | qwen-plus | ✅ max |
+| **resume-optimize** | dashscope | qwen-plus | ✅ turbo |
+| **company-analyze** | dashscope | qwen-plus | ✅ max |
+
+### 配置文件
+
+- `src/core/llm/config.ts` - 所有 Agent 的模型配置
+- `src/core/llm/client.ts` - 统一调用客户端
+- `src/core/api-client.ts` - 兼容层（保持旧接口）
+
+### 切换 Agent 模型
+
+修改 `src/core/llm/config.ts` 中的 `AGENT_CONFIGS`：
+
+```typescript
+'match-evaluate': {
+  provider: 'vectorengine',  // 切换到 VectorEngine
+  model: 'gpt-4.1',          // 使用 GPT-4.1
+  jsonMode: true,
+}
+```
 
 ## 项目结构
 
