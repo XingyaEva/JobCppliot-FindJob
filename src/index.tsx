@@ -12,6 +12,7 @@ import resumeRoutes, { matchRoutes, generateTargetedResume } from './routes/resu
 import interviewRoutes from './routes/interview'
 import optimizeRoutes from './routes/optimize'
 import { metricsRoutes } from './routes/metrics'
+import questionRoutes from './routes/questions'
 
 // 创建应用实例
 const app = new Hono()
@@ -45,6 +46,9 @@ app.get('/', (c) => {
               </a>
               <a href="/resumes" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-folder-open mr-1.5"></i><span class="hidden sm:inline">简历库</span>
+              </a>
+              <a href="/questions" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-question-circle mr-1.5"></i><span class="hidden sm:inline">题库</span>
               </a>
               <a href="/metrics" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-chart-bar mr-1.5"></i><span class="hidden sm:inline">评测</span>
@@ -142,9 +146,9 @@ app.get('/', (c) => {
         <div class="max-w-6xl mx-auto px-4 py-6">
           <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-400">
             <div class="flex items-center gap-4">
-              <span>Job Copilot v0.6.0</span>
+              <span>Job Copilot v0.9.0</span>
               <span class="hidden sm:inline">|</span>
-              <span class="hidden sm:inline">Phase 5 - 体验优化</span>
+              <span class="hidden sm:inline">Phase 8 - 面试题库</span>
             </div>
             <div class="flex items-center gap-4">
               <button onclick="JobCopilot.exportData()" class="hover:text-gray-600 transition-colors">
@@ -1829,8 +1833,11 @@ app.get('/jobs', (c) => {
               <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-900">
                 <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
               </a>
-              <a href="/resume" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                <i class="fas fa-file-alt mr-1.5"></i><span class="hidden sm:inline">我的简历</span>
+              <a href="/resumes" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-folder-open mr-1.5"></i><span class="hidden sm:inline">简历库</span>
+              </a>
+              <a href="/questions" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-question-circle mr-1.5"></i><span class="hidden sm:inline">题库</span>
               </a>
               <a href="/metrics" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-chart-bar mr-1.5"></i><span class="hidden sm:inline">评测</span>
@@ -2933,6 +2940,999 @@ app.get('/resume/:id/versions', (c) => {
       }} />
     </div>,
     { title: '版本历史 - Job Copilot' }
+  )
+})
+
+// ==================== 面试题库页面（Phase 8 新增） ====================
+
+// 面试题库列表页
+app.get('/questions', (c) => {
+  return c.render(
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-6xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/" class="flex items-center gap-2 font-bold text-lg">
+              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
+                <i class="fas fa-robot"></i>
+              </span>
+              <span class="hidden sm:inline">Job Copilot</span>
+            </a>
+            <nav class="flex items-center gap-1">
+              <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-home mr-1.5"></i><span class="hidden sm:inline">首页</span>
+              </a>
+              <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
+              </a>
+              <a href="/resumes" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-folder-open mr-1.5"></i><span class="hidden sm:inline">简历库</span>
+              </a>
+              <a href="/questions" class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-900">
+                <i class="fas fa-question-circle mr-1.5"></i><span class="hidden sm:inline">题库</span>
+              </a>
+            </nav>
+            <a href="/questions/new" class="px-3 py-1.5 bg-black text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+              <i class="fas fa-plus mr-1"></i><span class="hidden sm:inline">新建</span>
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
+        {/* 面包屑 */}
+        <nav class="flex items-center gap-2 text-sm text-gray-500 mb-6">
+          <a href="/" class="hover:text-gray-700"><i class="fas fa-home"></i></a>
+          <i class="fas fa-chevron-right text-xs text-gray-300"></i>
+          <span class="text-gray-900 font-medium">面试题库</span>
+        </nav>
+
+        {/* 标题和统计 */}
+        <div class="flex items-center justify-between mb-6">
+          <div>
+            <h1 class="text-2xl font-bold">面试题库</h1>
+            <p id="questions-stats" class="text-sm text-gray-500 mt-1">共 0 道题目</p>
+          </div>
+          <div class="flex gap-2">
+            <a href="/questions/import" class="px-3 py-2 border border-gray-200 text-gray-700 rounded-lg text-sm hover:bg-gray-50">
+              <i class="fas fa-file-import mr-1"></i>批量导入
+            </a>
+            <a href="/questions/new" class="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800">
+              <i class="fas fa-plus mr-1"></i>添加题目
+            </a>
+          </div>
+        </div>
+
+        {/* 筛选条件 */}
+        <div class="flex flex-wrap gap-4 mb-6">
+          {/* 分类筛选 */}
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-gray-500">分类:</span>
+            <select id="filter-category" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
+              <option value="">全部</option>
+              <option value="自我介绍">自我介绍</option>
+              <option value="项目经历">项目经历</option>
+              <option value="专业能力">专业能力</option>
+              <option value="行为面试">行为面试</option>
+              <option value="情景模拟">情景模拟</option>
+              <option value="职业规划">职业规划</option>
+              <option value="反问环节">反问环节</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+          
+          {/* 来源筛选 */}
+          <div class="flex items-center gap-2">
+            <span class="text-sm text-gray-500">来源:</span>
+            <select id="filter-source" class="px-3 py-1.5 border border-gray-200 rounded-lg text-sm">
+              <option value="">全部</option>
+              <option value="manual">手动添加</option>
+              <option value="agent">AI生成</option>
+              <option value="review">复盘总结</option>
+            </select>
+          </div>
+          
+          {/* 搜索 */}
+          <div class="flex-1 min-w-[200px]">
+            <div class="relative">
+              <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+              <input type="text" id="search-input" placeholder="搜索题目..." 
+                class="w-full pl-10 pr-4 py-1.5 border border-gray-200 rounded-lg text-sm" />
+            </div>
+          </div>
+        </div>
+
+        {/* 分类统计卡片 */}
+        <div id="category-stats" class="grid grid-cols-4 md:grid-cols-8 gap-2 mb-6">
+          {/* 由 JS 动态渲染 */}
+        </div>
+
+        {/* 题目列表 */}
+        <div id="questions-list" class="space-y-3">
+          {/* 骨架屏 */}
+          <div class="p-4 border border-gray-200 rounded-xl">
+            <div class="skeleton h-5 w-2/3 mb-3"></div>
+            <div class="flex gap-2">
+              <div class="skeleton h-6 w-16 rounded-full"></div>
+              <div class="skeleton h-6 w-20 rounded-full"></div>
+            </div>
+          </div>
+        </div>
+
+        {/* 空状态 */}
+        <div id="empty-state" class="hidden text-center py-12">
+          <div class="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-question-circle text-2xl text-gray-400"></i>
+          </div>
+          <h3 class="text-lg font-medium text-gray-900 mb-2">暂无题目</h3>
+          <p class="text-gray-500 mb-4">添加面试题目开始练习</p>
+          <a href="/questions/new" class="inline-flex items-center px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800">
+            <i class="fas fa-plus mr-2"></i>添加题目
+          </a>
+        </div>
+      </main>
+
+      {/* 页脚 */}
+      <footer class="border-t border-gray-100 mt-auto">
+        <div class="max-w-6xl mx-auto px-4 py-6">
+          <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-400">
+            <span>Job Copilot v0.9.0 - Phase 8 面试题库</span>
+          </div>
+        </div>
+      </footer>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            var questionsList = document.getElementById('questions-list');
+            var emptyState = document.getElementById('empty-state');
+            var statsText = document.getElementById('questions-stats');
+            var categoryStats = document.getElementById('category-stats');
+            var filterCategory = document.getElementById('filter-category');
+            var filterSource = document.getElementById('filter-source');
+            var searchInput = document.getElementById('search-input');
+            
+            var questions = JSON.parse(localStorage.getItem('jobcopilot_questions') || '[]');
+            var answers = JSON.parse(localStorage.getItem('jobcopilot_answers') || '[]');
+            
+            // 分类颜色映射
+            var categoryColors = {
+              '自我介绍': 'bg-blue-100 text-blue-700',
+              '项目经历': 'bg-purple-100 text-purple-700',
+              '专业能力': 'bg-green-100 text-green-700',
+              '行为面试': 'bg-yellow-100 text-yellow-700',
+              '情景模拟': 'bg-orange-100 text-orange-700',
+              '职业规划': 'bg-pink-100 text-pink-700',
+              '反问环节': 'bg-cyan-100 text-cyan-700',
+              '其他': 'bg-gray-100 text-gray-700'
+            };
+            
+            var difficultyLabels = {
+              'easy': { text: '简单', color: 'bg-green-100 text-green-600' },
+              'medium': { text: '中等', color: 'bg-yellow-100 text-yellow-600' },
+              'hard': { text: '困难', color: 'bg-red-100 text-red-600' }
+            };
+            
+            function render() {
+              var filtered = questions.slice();
+              
+              // 筛选
+              var category = filterCategory.value;
+              var source = filterSource.value;
+              var search = searchInput.value.toLowerCase().trim();
+              
+              if (category) {
+                filtered = filtered.filter(function(q) { return q.category === category; });
+              }
+              if (source) {
+                filtered = filtered.filter(function(q) { return q.source === source; });
+              }
+              if (search) {
+                filtered = filtered.filter(function(q) {
+                  return q.question.toLowerCase().includes(search) ||
+                    (q.tags || []).some(function(t) { return t.toLowerCase().includes(search); });
+                });
+              }
+              
+              // 按更新时间倒序
+              filtered.sort(function(a, b) { 
+                return new Date(b.updated_at || b.created_at) - new Date(a.updated_at || a.created_at); 
+              });
+              
+              statsText.textContent = '共 ' + questions.length + ' 道题目' + 
+                (filtered.length !== questions.length ? '，已筛选 ' + filtered.length + ' 道' : '');
+              
+              if (questions.length === 0) {
+                questionsList.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+              }
+              
+              emptyState.classList.add('hidden');
+              
+              // 渲染分类统计
+              var catCounts = {};
+              questions.forEach(function(q) {
+                catCounts[q.category] = (catCounts[q.category] || 0) + 1;
+              });
+              
+              categoryStats.innerHTML = Object.keys(categoryColors).map(function(cat) {
+                var count = catCounts[cat] || 0;
+                var isActive = category === cat;
+                return '<button data-category="' + cat + '" class="px-3 py-2 rounded-lg text-xs font-medium transition-colors ' +
+                  (isActive ? categoryColors[cat] + ' ring-2 ring-offset-1 ring-current' : 'bg-gray-50 text-gray-600 hover:bg-gray-100') + '">' +
+                  cat + ' <span class="ml-1">(' + count + ')</span></button>';
+              }).join('');
+              
+              // 绑定分类点击
+              categoryStats.querySelectorAll('button').forEach(function(btn) {
+                btn.onclick = function() {
+                  var cat = btn.dataset.category;
+                  filterCategory.value = filterCategory.value === cat ? '' : cat;
+                  render();
+                };
+              });
+              
+              // 渲染题目列表
+              questionsList.innerHTML = filtered.map(function(q) {
+                var hasAnswer = answers.some(function(a) { return a.question_id === q.id && a.is_current; });
+                var catColor = categoryColors[q.category] || 'bg-gray-100 text-gray-700';
+                var diff = difficultyLabels[q.difficulty] || difficultyLabels['medium'];
+                
+                return '<a href="/questions/' + q.id + '" class="block p-4 border border-gray-200 rounded-xl hover:border-gray-300 hover:shadow-sm transition-all">' +
+                  '<div class="flex items-start justify-between gap-4">' +
+                    '<div class="flex-1">' +
+                      '<h3 class="font-medium text-gray-900 mb-2 line-clamp-2">' + q.question + '</h3>' +
+                      '<div class="flex flex-wrap gap-2">' +
+                        '<span class="px-2 py-0.5 text-xs rounded-full ' + catColor + '">' + q.category + '</span>' +
+                        '<span class="px-2 py-0.5 text-xs rounded-full ' + diff.color + '">' + diff.text + '</span>' +
+                        (q.has_ai_feedback ? '<span class="px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-600"><i class="fas fa-robot mr-1"></i>已点评</span>' : '') +
+                        (hasAnswer ? '<span class="px-2 py-0.5 text-xs rounded-full bg-green-100 text-green-600"><i class="fas fa-check mr-1"></i>已回答</span>' : '') +
+                        (q.linked_jd_title ? '<span class="px-2 py-0.5 text-xs rounded-full bg-blue-50 text-blue-600"><i class="fas fa-link mr-1"></i>' + q.linked_jd_title + '</span>' : '') +
+                      '</div>' +
+                    '</div>' +
+                    '<div class="text-gray-400">' +
+                      '<i class="fas fa-chevron-right"></i>' +
+                    '</div>' +
+                  '</div>' +
+                '</a>';
+              }).join('');
+            }
+            
+            // 监听筛选变化
+            filterCategory.onchange = render;
+            filterSource.onchange = render;
+            searchInput.oninput = render;
+            
+            render();
+          });
+        `
+      }} />
+    </div>,
+    { title: '面试题库 - Job Copilot' }
+  )
+})
+
+// 新建题目页
+app.get('/questions/new', (c) => {
+  return c.render(
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/questions" class="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+              <i class="fas fa-arrow-left"></i>
+              <span>返回题库</span>
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 max-w-2xl mx-auto px-4 py-8 w-full">
+        <h1 class="text-2xl font-bold mb-6">添加面试题目</h1>
+
+        <form id="question-form" class="space-y-6">
+          {/* 题目内容 */}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">题目内容 *</label>
+            <textarea id="question-content" rows={3} required
+              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="请输入面试题目..."></textarea>
+          </div>
+
+          {/* 分类 */}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">分类 *</label>
+            <select id="question-category" required
+              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <option value="">请选择分类</option>
+              <option value="自我介绍">自我介绍</option>
+              <option value="项目经历">项目经历</option>
+              <option value="专业能力">专业能力</option>
+              <option value="行为面试">行为面试</option>
+              <option value="情景模拟">情景模拟</option>
+              <option value="职业规划">职业规划</option>
+              <option value="反问环节">反问环节</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+
+          {/* 难度 */}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">难度</label>
+            <div class="flex gap-4">
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="difficulty" value="easy" class="text-blue-500" />
+                <span class="px-2 py-1 text-sm bg-green-100 text-green-600 rounded">简单</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="difficulty" value="medium" checked class="text-blue-500" />
+                <span class="px-2 py-1 text-sm bg-yellow-100 text-yellow-600 rounded">中等</span>
+              </label>
+              <label class="flex items-center gap-2 cursor-pointer">
+                <input type="radio" name="difficulty" value="hard" class="text-blue-500" />
+                <span class="px-2 py-1 text-sm bg-red-100 text-red-600 rounded">困难</span>
+              </label>
+            </div>
+          </div>
+
+          {/* 标签 */}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">标签（用逗号分隔）</label>
+            <input type="text" id="question-tags" 
+              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="如: Java, 数据库, 系统设计" />
+          </div>
+
+          {/* 关联岗位 */}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">关联岗位（可选）</label>
+            <select id="question-job" 
+              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <option value="">不关联岗位</option>
+              {/* 由 JS 动态填充 */}
+            </select>
+          </div>
+
+          {/* 提交按钮 */}
+          <div class="flex gap-4">
+            <a href="/questions" class="px-6 py-3 border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50">
+              取消
+            </a>
+            <button type="submit" class="flex-1 px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800">
+              <i class="fas fa-plus mr-2"></i>添加题目
+            </button>
+          </div>
+        </form>
+      </main>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            var form = document.getElementById('question-form');
+            var jobSelect = document.getElementById('question-job');
+            
+            // 加载岗位列表
+            var jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+            jobs.filter(function(j) { return j.status === 'completed'; }).forEach(function(job) {
+              var option = document.createElement('option');
+              option.value = job.id;
+              option.textContent = job.title + (job.company ? ' @ ' + job.company : '');
+              option.dataset.title = job.title;
+              jobSelect.appendChild(option);
+            });
+            
+            form.onsubmit = function(e) {
+              e.preventDefault();
+              
+              var content = document.getElementById('question-content').value.trim();
+              var category = document.getElementById('question-category').value;
+              var difficulty = document.querySelector('input[name="difficulty"]:checked').value;
+              var tags = document.getElementById('question-tags').value.split(',').map(function(t) { return t.trim(); }).filter(Boolean);
+              var jobId = jobSelect.value;
+              var jobTitle = jobId ? jobSelect.options[jobSelect.selectedIndex].dataset.title : '';
+              
+              var questions = JSON.parse(localStorage.getItem('jobcopilot_questions') || '[]');
+              
+              var newQuestion = {
+                id: 'q_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                question: content,
+                category: category,
+                difficulty: difficulty,
+                tags: tags,
+                source: 'manual',
+                linked_jd_id: jobId || undefined,
+                linked_jd_title: jobTitle || undefined,
+                answer_count: 0,
+                has_ai_feedback: false,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              };
+              
+              questions.unshift(newQuestion);
+              localStorage.setItem('jobcopilot_questions', JSON.stringify(questions));
+              
+              window.location.href = '/questions/' + newQuestion.id;
+            };
+          });
+        `
+      }} />
+    </div>,
+    { title: '添加题目 - Job Copilot' }
+  )
+})
+
+// 题目详情页
+app.get('/questions/:id', (c) => {
+  const questionId = c.req.param('id')
+  
+  return c.render(
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/questions" class="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+              <i class="fas fa-arrow-left"></i>
+              <span>返回题库</span>
+            </a>
+            <button id="delete-btn" class="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-sm">
+              <i class="fas fa-trash mr-1"></i>删除
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 max-w-4xl mx-auto px-4 py-8 w-full">
+        {/* 题目信息 */}
+        <div id="question-info" class="mb-8">
+          <div class="skeleton h-8 w-3/4 mb-4"></div>
+          <div class="flex gap-2">
+            <div class="skeleton h-6 w-20 rounded-full"></div>
+            <div class="skeleton h-6 w-16 rounded-full"></div>
+          </div>
+        </div>
+
+        {/* 回答区域 */}
+        <div class="mb-8">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">我的回答</h2>
+            <div class="flex gap-2">
+              <button id="show-versions" class="text-sm text-gray-500 hover:text-gray-700">
+                <i class="fas fa-history mr-1"></i>版本历史 (<span id="version-count">0</span>)
+              </button>
+            </div>
+          </div>
+          
+          <textarea id="answer-content" rows={8}
+            class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-y"
+            placeholder="在此输入你的回答...可以使用 PREP/STAR 结构组织回答"></textarea>
+          
+          <div class="flex items-center justify-between mt-4">
+            <div class="flex gap-2">
+              <button id="save-answer" class="px-4 py-2 bg-black text-white rounded-lg text-sm hover:bg-gray-800">
+                <i class="fas fa-save mr-1"></i>保存回答
+              </button>
+              <button id="get-feedback" class="px-4 py-2 border border-purple-200 text-purple-600 rounded-lg text-sm hover:bg-purple-50">
+                <i class="fas fa-robot mr-1"></i>AI 点评
+              </button>
+            </div>
+            <span id="save-status" class="text-sm text-gray-400"></span>
+          </div>
+        </div>
+
+        {/* AI 反馈区域 */}
+        <div id="feedback-section" class="hidden">
+          <h2 class="text-lg font-semibold mb-4">
+            <i class="fas fa-robot text-purple-500 mr-2"></i>AI 教练点评
+          </h2>
+          
+          <div id="feedback-loading" class="hidden text-center py-8">
+            <i class="fas fa-spinner loading-spinner text-3xl text-purple-400 mb-4"></i>
+            <p class="text-gray-500">AI 正在分析你的回答...</p>
+          </div>
+          
+          <div id="feedback-content" class="space-y-4">
+            {/* 评分 */}
+            <div class="bg-gradient-to-r from-purple-50 to-blue-50 rounded-xl p-4">
+              <div class="flex items-center justify-between">
+                <span class="text-sm text-gray-600">整体评分</span>
+                <div class="flex items-center gap-2">
+                  <span id="overall-score" class="text-3xl font-bold text-purple-600">-</span>
+                  <span class="text-gray-400">/10</span>
+                </div>
+              </div>
+              <p id="improvement-direction" class="text-sm text-gray-600 mt-2"></p>
+            </div>
+            
+            {/* 必改项 */}
+            <div id="must-fix-section" class="hidden">
+              <h3 class="font-medium text-red-600 mb-2"><i class="fas fa-exclamation-circle mr-2"></i>必改项</h3>
+              <ul id="must-fix-list" class="space-y-2 text-sm"></ul>
+            </div>
+            
+            {/* 亮点 */}
+            <div id="highlights-section" class="hidden">
+              <h3 class="font-medium text-green-600 mb-2"><i class="fas fa-star mr-2"></i>亮点</h3>
+              <ul id="highlights-list" class="space-y-2 text-sm"></ul>
+            </div>
+            
+            {/* 优化建议 */}
+            <div id="suggestions-section" class="hidden">
+              <h3 class="font-medium text-yellow-600 mb-2"><i class="fas fa-lightbulb mr-2"></i>优化建议</h3>
+              <ul id="suggestions-list" class="space-y-2 text-sm"></ul>
+            </div>
+            
+            {/* 表达润色 */}
+            <div id="polish-section" class="hidden">
+              <h3 class="font-medium text-blue-600 mb-2"><i class="fas fa-magic mr-2"></i>表达润色</h3>
+              <ul id="polish-list" class="space-y-2 text-sm"></ul>
+            </div>
+            
+            {/* 优化后的回答 */}
+            <div id="improved-answer-section" class="hidden">
+              <h3 class="font-medium text-purple-600 mb-2"><i class="fas fa-wand-magic-sparkles mr-2"></i>建议回答</h3>
+              <div id="improved-answer" class="bg-purple-50 rounded-xl p-4 text-sm whitespace-pre-wrap"></div>
+              <button id="apply-improved" class="mt-2 text-sm text-purple-600 hover:text-purple-800">
+                <i class="fas fa-copy mr-1"></i>使用此回答
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* 版本历史弹窗 */}
+        <div id="versions-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+          <div class="bg-white rounded-2xl w-full max-w-lg max-h-[80vh] overflow-hidden mx-4">
+            <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+              <h3 class="font-semibold">回答历史版本</h3>
+              <button id="close-versions" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times"></i>
+              </button>
+            </div>
+            <div id="versions-list" class="p-4 space-y-3 overflow-y-auto max-h-[60vh]">
+              {/* 由 JS 渲染 */}
+            </div>
+          </div>
+        </div>
+      </main>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            var questionId = '${questionId}';
+            var questions = JSON.parse(localStorage.getItem('jobcopilot_questions') || '[]');
+            var answers = JSON.parse(localStorage.getItem('jobcopilot_answers') || '[]');
+            var jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+            
+            var question = questions.find(function(q) { return q.id === questionId; });
+            if (!question) {
+              document.getElementById('question-info').innerHTML = '<p class="text-red-500">题目不存在</p>';
+              return;
+            }
+            
+            var categoryColors = {
+              '自我介绍': 'bg-blue-100 text-blue-700',
+              '项目经历': 'bg-purple-100 text-purple-700',
+              '专业能力': 'bg-green-100 text-green-700',
+              '行为面试': 'bg-yellow-100 text-yellow-700',
+              '情景模拟': 'bg-orange-100 text-orange-700',
+              '职业规划': 'bg-pink-100 text-pink-700',
+              '反问环节': 'bg-cyan-100 text-cyan-700',
+              '其他': 'bg-gray-100 text-gray-700'
+            };
+            
+            // 渲染题目信息
+            var catColor = categoryColors[question.category] || 'bg-gray-100 text-gray-700';
+            document.getElementById('question-info').innerHTML = 
+              '<h1 class="text-xl font-bold mb-4">' + question.question + '</h1>' +
+              '<div class="flex flex-wrap gap-2">' +
+                '<span class="px-3 py-1 text-sm rounded-full ' + catColor + '">' + question.category + '</span>' +
+                (question.linked_jd_title ? '<span class="px-3 py-1 text-sm rounded-full bg-blue-50 text-blue-600"><i class="fas fa-link mr-1"></i>' + question.linked_jd_title + '</span>' : '') +
+                (question.tags || []).map(function(t) { return '<span class="px-3 py-1 text-sm rounded-full bg-gray-100 text-gray-600">' + t + '</span>'; }).join('') +
+              '</div>';
+            
+            // 加载当前回答
+            var answerContent = document.getElementById('answer-content');
+            var questionAnswers = answers.filter(function(a) { return a.question_id === questionId; });
+            questionAnswers.sort(function(a, b) { return b.version - a.version; });
+            var currentAnswer = questionAnswers.find(function(a) { return a.is_current; });
+            
+            document.getElementById('version-count').textContent = questionAnswers.length;
+            
+            if (currentAnswer) {
+              answerContent.value = currentAnswer.content;
+              
+              // 如果有 AI 反馈，显示
+              if (currentAnswer.ai_feedback) {
+                showFeedback(currentAnswer.ai_feedback);
+              }
+            }
+            
+            // 保存回答
+            document.getElementById('save-answer').onclick = function() {
+              var content = answerContent.value.trim();
+              if (!content) {
+                alert('请输入回答内容');
+                return;
+              }
+              
+              // 更新之前的当前版本
+              answers.forEach(function(a) {
+                if (a.question_id === questionId && a.is_current) {
+                  a.is_current = false;
+                }
+              });
+              
+              var latestVersion = questionAnswers.length > 0 ? questionAnswers[0].version : 0;
+              
+              var newAnswer = {
+                id: 'ans_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                question_id: questionId,
+                content: content,
+                version: latestVersion + 1,
+                is_current: true,
+                created_at: new Date().toISOString()
+              };
+              
+              answers.unshift(newAnswer);
+              localStorage.setItem('jobcopilot_answers', JSON.stringify(answers));
+              
+              // 更新题目的回答计数
+              question.answer_count = (question.answer_count || 0) + 1;
+              question.updated_at = new Date().toISOString();
+              localStorage.setItem('jobcopilot_questions', JSON.stringify(questions));
+              
+              questionAnswers.unshift(newAnswer);
+              currentAnswer = newAnswer;
+              document.getElementById('version-count').textContent = questionAnswers.length;
+              document.getElementById('save-status').textContent = '已保存 v' + newAnswer.version;
+              
+              setTimeout(function() {
+                document.getElementById('save-status').textContent = '';
+              }, 3000);
+            };
+            
+            // AI 点评
+            document.getElementById('get-feedback').onclick = async function() {
+              var content = answerContent.value.trim();
+              if (!content) {
+                alert('请先输入回答内容');
+                return;
+              }
+              
+              // 先保存
+              document.getElementById('save-answer').click();
+              
+              document.getElementById('feedback-section').classList.remove('hidden');
+              document.getElementById('feedback-loading').classList.remove('hidden');
+              document.getElementById('feedback-content').classList.add('hidden');
+              
+              try {
+                // 获取关联岗位信息
+                var jobContext = null;
+                if (question.linked_jd_id) {
+                  var job = jobs.find(function(j) { return j.id === question.linked_jd_id; });
+                  if (job && job.structured_jd) {
+                    jobContext = {
+                      title: job.title || job.structured_jd.title,
+                      company: job.company || job.structured_jd.company,
+                      requirements: job.structured_jd.requirements || []
+                    };
+                  }
+                }
+                
+                var response = await fetch('/api/questions/' + questionId + '/feedback', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    answer_id: currentAnswer?.id,
+                    mode: jobContext ? 'jd_based' : 'general',
+                    job_context: jobContext
+                  })
+                });
+                
+                var data = await response.json();
+                
+                if (data.success) {
+                  // 更新本地数据
+                  if (currentAnswer) {
+                    currentAnswer.ai_feedback = data.feedback;
+                    currentAnswer.feedback_requested_at = new Date().toISOString();
+                    localStorage.setItem('jobcopilot_answers', JSON.stringify(answers));
+                    
+                    question.has_ai_feedback = true;
+                    localStorage.setItem('jobcopilot_questions', JSON.stringify(questions));
+                  }
+                  
+                  showFeedback(data.feedback, data.improved_answer);
+                } else {
+                  alert('获取 AI 点评失败: ' + data.error);
+                }
+              } catch (err) {
+                alert('请求失败: ' + err.message);
+              }
+              
+              document.getElementById('feedback-loading').classList.add('hidden');
+              document.getElementById('feedback-content').classList.remove('hidden');
+            };
+            
+            function showFeedback(feedback, improvedAnswer) {
+              document.getElementById('feedback-section').classList.remove('hidden');
+              document.getElementById('feedback-content').classList.remove('hidden');
+              document.getElementById('feedback-loading').classList.add('hidden');
+              
+              document.getElementById('overall-score').textContent = feedback.overall_score || '-';
+              document.getElementById('improvement-direction').textContent = feedback.improvement_direction || '';
+              
+              // 必改项
+              var mustFixSection = document.getElementById('must-fix-section');
+              var mustFixList = document.getElementById('must-fix-list');
+              if (feedback.must_fix && feedback.must_fix.length > 0) {
+                mustFixSection.classList.remove('hidden');
+                mustFixList.innerHTML = feedback.must_fix.map(function(item) {
+                  return '<li class="bg-red-50 p-3 rounded-lg text-red-700">' + item + '</li>';
+                }).join('');
+              } else {
+                mustFixSection.classList.add('hidden');
+              }
+              
+              // 亮点
+              var highlightsSection = document.getElementById('highlights-section');
+              var highlightsList = document.getElementById('highlights-list');
+              if (feedback.highlights && feedback.highlights.length > 0) {
+                highlightsSection.classList.remove('hidden');
+                highlightsList.innerHTML = feedback.highlights.map(function(item) {
+                  return '<li class="bg-green-50 p-3 rounded-lg text-green-700">' + item + '</li>';
+                }).join('');
+              } else {
+                highlightsSection.classList.add('hidden');
+              }
+              
+              // 优化建议
+              var suggestionsSection = document.getElementById('suggestions-section');
+              var suggestionsList = document.getElementById('suggestions-list');
+              if (feedback.suggestions && feedback.suggestions.length > 0) {
+                suggestionsSection.classList.remove('hidden');
+                suggestionsList.innerHTML = feedback.suggestions.map(function(item) {
+                  return '<li class="bg-yellow-50 p-3 rounded-lg text-yellow-700">' + item + '</li>';
+                }).join('');
+              } else {
+                suggestionsSection.classList.add('hidden');
+              }
+              
+              // 表达润色
+              var polishSection = document.getElementById('polish-section');
+              var polishList = document.getElementById('polish-list');
+              if (feedback.polish && feedback.polish.length > 0) {
+                polishSection.classList.remove('hidden');
+                polishList.innerHTML = feedback.polish.map(function(item) {
+                  return '<li class="bg-blue-50 p-3 rounded-lg text-blue-700">' + item + '</li>';
+                }).join('');
+              } else {
+                polishSection.classList.add('hidden');
+              }
+              
+              // 优化后的回答
+              var improvedSection = document.getElementById('improved-answer-section');
+              var improvedDiv = document.getElementById('improved-answer');
+              if (improvedAnswer) {
+                improvedSection.classList.remove('hidden');
+                improvedDiv.textContent = improvedAnswer;
+                
+                document.getElementById('apply-improved').onclick = function() {
+                  answerContent.value = improvedAnswer;
+                  document.getElementById('save-answer').click();
+                };
+              } else {
+                improvedSection.classList.add('hidden');
+              }
+            }
+            
+            // 版本历史
+            document.getElementById('show-versions').onclick = function() {
+              document.getElementById('versions-modal').classList.remove('hidden');
+              
+              var versionsList = document.getElementById('versions-list');
+              versionsList.innerHTML = questionAnswers.map(function(ans) {
+                return '<div class="border border-gray-200 rounded-lg p-3 cursor-pointer hover:bg-gray-50" data-id="' + ans.id + '">' +
+                  '<div class="flex items-center justify-between mb-2">' +
+                    '<span class="font-medium">v' + ans.version + (ans.is_current ? ' <span class="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full">当前</span>' : '') + '</span>' +
+                    '<span class="text-xs text-gray-400">' + new Date(ans.created_at).toLocaleString('zh-CN') + '</span>' +
+                  '</div>' +
+                  '<p class="text-sm text-gray-600 line-clamp-3">' + ans.content + '</p>' +
+                '</div>';
+              }).join('');
+              
+              // 点击版本恢复
+              versionsList.querySelectorAll('[data-id]').forEach(function(el) {
+                el.onclick = function() {
+                  var ansId = el.dataset.id;
+                  var ans = answers.find(function(a) { return a.id === ansId; });
+                  if (ans) {
+                    answerContent.value = ans.content;
+                    document.getElementById('versions-modal').classList.add('hidden');
+                  }
+                };
+              });
+            };
+            
+            document.getElementById('close-versions').onclick = function() {
+              document.getElementById('versions-modal').classList.add('hidden');
+            };
+            
+            // 删除题目
+            document.getElementById('delete-btn').onclick = function() {
+              if (confirm('确定要删除这道题目吗？相关的回答也会被删除。')) {
+                questions = questions.filter(function(q) { return q.id !== questionId; });
+                localStorage.setItem('jobcopilot_questions', JSON.stringify(questions));
+                
+                answers = answers.filter(function(a) { return a.question_id !== questionId; });
+                localStorage.setItem('jobcopilot_answers', JSON.stringify(answers));
+                
+                window.location.href = '/questions';
+              }
+            };
+          });
+        `
+      }} />
+    </div>,
+    { title: '题目详情 - Job Copilot' }
+  )
+})
+
+// 批量导入页面
+app.get('/questions/import', (c) => {
+  return c.render(
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/questions" class="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+              <i class="fas fa-arrow-left"></i>
+              <span>返回题库</span>
+            </a>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 max-w-2xl mx-auto px-4 py-8 w-full">
+        <h1 class="text-2xl font-bold mb-2">批量导入题目</h1>
+        <p class="text-gray-500 mb-6">支持 JSON 格式批量导入面试题目</p>
+
+        <form id="import-form" class="space-y-6">
+          {/* JSON 输入 */}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">JSON 数据</label>
+            <textarea id="import-data" rows={12}
+              class="w-full px-4 py-3 border border-gray-200 rounded-xl font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder={`[
+  {
+    "question": "请介绍一下你自己",
+    "category": "自我介绍",
+    "difficulty": "easy",
+    "tags": ["基础", "开场"]
+  },
+  {
+    "question": "介绍一个你最有挑战的项目",
+    "category": "项目经历",
+    "difficulty": "medium"
+  }
+]`}></textarea>
+          </div>
+
+          {/* 格式说明 */}
+          <div class="bg-gray-50 rounded-xl p-4">
+            <h3 class="font-medium text-gray-700 mb-2"><i class="fas fa-info-circle mr-2"></i>格式说明</h3>
+            <ul class="text-sm text-gray-600 space-y-1">
+              <li>• <code class="bg-gray-200 px-1 rounded">question</code>: 题目内容（必填）</li>
+              <li>• <code class="bg-gray-200 px-1 rounded">category</code>: 分类（自我介绍/项目经历/专业能力/行为面试/情景模拟/职业规划/反问环节/其他）</li>
+              <li>• <code class="bg-gray-200 px-1 rounded">difficulty</code>: 难度（easy/medium/hard）</li>
+              <li>• <code class="bg-gray-200 px-1 rounded">tags</code>: 标签数组</li>
+            </ul>
+          </div>
+
+          {/* 关联岗位 */}
+          <div>
+            <label class="block text-sm font-medium text-gray-700 mb-2">关联岗位（可选）</label>
+            <select id="import-job" 
+              class="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+              <option value="">不关联岗位</option>
+            </select>
+          </div>
+
+          {/* 提交按钮 */}
+          <div class="flex gap-4">
+            <a href="/questions" class="px-6 py-3 border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50">
+              取消
+            </a>
+            <button type="submit" class="flex-1 px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800">
+              <i class="fas fa-file-import mr-2"></i>导入
+            </button>
+          </div>
+        </form>
+
+        {/* 导入结果 */}
+        <div id="import-result" class="hidden mt-6 p-4 bg-green-50 rounded-xl">
+          <p class="text-green-700"><i class="fas fa-check-circle mr-2"></i>成功导入 <span id="import-count">0</span> 道题目</p>
+        </div>
+      </main>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            var form = document.getElementById('import-form');
+            var jobSelect = document.getElementById('import-job');
+            
+            // 加载岗位列表
+            var jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+            jobs.filter(function(j) { return j.status === 'completed'; }).forEach(function(job) {
+              var option = document.createElement('option');
+              option.value = job.id;
+              option.textContent = job.title + (job.company ? ' @ ' + job.company : '');
+              option.dataset.title = job.title;
+              jobSelect.appendChild(option);
+            });
+            
+            form.onsubmit = function(e) {
+              e.preventDefault();
+              
+              var dataStr = document.getElementById('import-data').value.trim();
+              var jobId = jobSelect.value;
+              var jobTitle = jobId ? jobSelect.options[jobSelect.selectedIndex].dataset.title : '';
+              
+              try {
+                var items = JSON.parse(dataStr);
+                if (!Array.isArray(items)) {
+                  items = [items];
+                }
+                
+                var questions = JSON.parse(localStorage.getItem('jobcopilot_questions') || '[]');
+                var now = new Date().toISOString();
+                var count = 0;
+                
+                items.forEach(function(item) {
+                  if (!item.question && !item.q && !item.content) return;
+                  
+                  var newQuestion = {
+                    id: 'q_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                    question: item.question || item.q || item.content,
+                    category: item.category || item.type || '其他',
+                    difficulty: item.difficulty || item.level || 'medium',
+                    tags: item.tags || [],
+                    source: 'manual',
+                    linked_jd_id: jobId || undefined,
+                    linked_jd_title: jobTitle || undefined,
+                    answer_count: 0,
+                    has_ai_feedback: false,
+                    created_at: now,
+                    updated_at: now
+                  };
+                  
+                  questions.unshift(newQuestion);
+                  count++;
+                });
+                
+                localStorage.setItem('jobcopilot_questions', JSON.stringify(questions));
+                
+                document.getElementById('import-count').textContent = count;
+                document.getElementById('import-result').classList.remove('hidden');
+                
+                setTimeout(function() {
+                  window.location.href = '/questions';
+                }, 1500);
+                
+              } catch (err) {
+                alert('JSON 格式错误: ' + err.message);
+              }
+            };
+          });
+        `
+      }} />
+    </div>,
+    { title: '批量导入 - Job Copilot' }
   )
 })
 
@@ -5383,13 +6383,16 @@ app.route('/api/job', optimizeRoutes)
 // 挂载评测相关路由
 app.route('/api/metrics', metricsRoutes)
 
+// 挂载面试题库相关路由
+app.route('/api/questions', questionRoutes)
+
 // API健康检查
 app.get('/api/health', (c) => {
   return c.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '0.8.0',
-    phase: 'Phase 7 - 简历库增强',
+    version: '0.9.0',
+    phase: 'Phase 8 - 面试题库',
   })
 })
 

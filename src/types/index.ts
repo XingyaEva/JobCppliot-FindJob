@@ -375,3 +375,79 @@ export interface DAGState {
   is_complete: boolean;
   error?: string;
 }
+
+// ==================== Phase 8: 面试题库相关 ====================
+
+/** 题目来源 */
+export type QuestionSource = 'manual' | 'agent' | 'review';
+
+/** 题目分类 */
+export type QuestionCategory = 
+  | '自我介绍' 
+  | '项目经历' 
+  | '专业能力' 
+  | '行为面试' 
+  | '情景模拟'
+  | '职业规划'
+  | '反问环节'
+  | '其他';
+
+/** 题目难度 */
+export type QuestionDifficulty = 'easy' | 'medium' | 'hard';
+
+/** 面试题库 - 题目 */
+export interface QuestionBankItem {
+  id: string;
+  question: string;                    // 题目内容
+  source: QuestionSource;              // 来源
+  linked_jd_id?: string;               // 关联岗位ID
+  linked_jd_title?: string;            // 关联岗位名称（冗余存储便于显示）
+  category: QuestionCategory;          // 分类
+  difficulty: QuestionDifficulty;      // 难度
+  tags: string[];                      // 标签
+  answer_count: number;                // 回答版本数
+  has_ai_feedback: boolean;            // 是否有AI点评
+  created_at: string;
+  updated_at: string;
+}
+
+/** AI教练反馈 */
+export interface AICoachFeedback {
+  must_fix: string[];                  // 必改项
+  suggestions: string[];               // 优化建议
+  polish: string[];                    // 表达润色
+  overall_score: number;               // 整体评分 1-10
+  highlights: string[];                // 亮点
+  improvement_direction: string;       // 改进方向
+}
+
+/** 面试题库 - 回答 */
+export interface QuestionAnswer {
+  id: string;
+  question_id: string;                 // 所属题目ID
+  content: string;                     // 回答内容（纯文本或PREP结构化JSON）
+  version: number;                     // 版本号
+  version_tag?: string;                // 版本标签
+  ai_feedback?: AICoachFeedback;       // AI教练反馈
+  feedback_requested_at?: string;      // 请求AI点评时间
+  is_current: boolean;                 // 是否为当前版本
+  created_at: string;
+}
+
+/** AI教练请求参数 */
+export interface CoachRequest {
+  question: string;
+  answer: string;
+  mode: 'jd_based' | 'general';        // 基于JD / 通用辅导
+  job_context?: {
+    title: string;
+    company: string;
+    requirements: string[];
+  };
+}
+
+/** AI教练响应 */
+export interface CoachResponse {
+  feedback: AICoachFeedback;
+  improved_answer?: string;            // 优化后的回答建议
+}

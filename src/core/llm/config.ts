@@ -196,6 +196,17 @@ export const AGENT_CONFIGS: Record<string, AgentLLMConfig> = {
     maxTokens: 8192,
     jsonMode: true,
   },
+  
+  // ==================== Phase 8 新增 ====================
+  
+  /** 面试教练（回答点评） */
+  'interview-coach': {
+    provider: 'dashscope',
+    model: MODELS.QWEN_PLUS,
+    temperature: 0.7,
+    maxTokens: 4096,
+    jsonMode: true,
+  },
 };
 
 /**
