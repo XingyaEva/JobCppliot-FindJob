@@ -451,3 +451,77 @@ export interface CoachResponse {
   feedback: AICoachFeedback;
   improved_answer?: string;            // 优化后的回答建议
 }
+
+// ==================== Phase 9: 投递跟踪相关 ====================
+
+/** 投递状态 */
+export type ApplicationStatus = 
+  | 'applied'      // 已投递
+  | 'screening'    // 简历筛选中
+  | 'interview'    // 面试中
+  | 'offer'        // 已获 Offer
+  | 'rejected'     // 已拒绝
+  | 'withdrawn';   // 已撤回
+
+/** 面试类型 */
+export type InterviewType = 'phone' | 'video' | 'onsite' | 'written';
+
+/** 面试记录 */
+export interface InterviewRecord {
+  id: string;
+  round: number;                      // 面试轮次
+  type: InterviewType;                // 面试类型
+  scheduled_at?: string;              // 面试时间
+  interviewer?: string;               // 面试官
+  feedback?: string;                  // 面试反馈
+  result?: 'passed' | 'failed' | 'pending';  // 面试结果
+  created_at: string;
+}
+
+/** 状态变更记录 */
+export interface StatusChange {
+  status: ApplicationStatus;
+  changed_at: string;
+  note?: string;
+}
+
+/** 投递记录 */
+export interface Application {
+  id: string;
+  job_id?: string;                    // 关联岗位ID（可选）
+  
+  // 基础信息
+  company: string;                    // 公司名称
+  position: string;                   // 职位名称
+  job_url?: string;                   // 职位链接
+  
+  // 状态跟踪
+  status: ApplicationStatus;          // 当前状态
+  status_history: StatusChange[];     // 状态变更历史
+  
+  // 时间节点
+  applied_at: string;                 // 投递时间
+  
+  // 面试信息
+  interviews: InterviewRecord[];      // 面试记录
+  
+  // 其他信息
+  salary_range?: string;              // 薪资范围
+  notes?: string;                     // 备注
+  tags: string[];                     // 标签
+  source?: string;                    // 投递渠道（Boss/猎聘/官网等）
+  
+  created_at: string;
+  updated_at: string;
+}
+
+/** 投递统计 */
+export interface ApplicationStats {
+  total: number;
+  byStatus: Record<ApplicationStatus, number>;
+  bySource: Record<string, number>;
+  interviewRate: number;              // 面试率
+  offerRate: number;                  // Offer率
+  thisWeek: number;                   // 本周投递
+  thisMonth: number;                  // 本月投递
+}

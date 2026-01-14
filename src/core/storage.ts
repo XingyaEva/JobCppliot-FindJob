@@ -7,7 +7,8 @@
 
 import type { 
   Job, Resume, ResumeVersion, ResumeContent, Match, InterviewPrep, ResumeOptimization,
-  QuestionBankItem, QuestionAnswer, QuestionCategory, QuestionDifficulty, QuestionSource
+  QuestionBankItem, QuestionAnswer, QuestionCategory, QuestionDifficulty, QuestionSource,
+  Application, ApplicationStatus, ApplicationStats, InterviewRecord, StatusChange
 } from '../types';
 
 // 存储键
@@ -21,6 +22,8 @@ export const STORAGE_KEYS = {
   // Phase 8 新增
   QUESTIONS: 'jobcopilot_questions',
   ANSWERS: 'jobcopilot_answers',
+  // Phase 9 新增
+  APPLICATIONS: 'jobcopilot_applications',
 } as const;
 
 // 服务端内存存储（临时方案）
@@ -33,6 +36,7 @@ const memoryStore: Record<string, any[]> = {
   [STORAGE_KEYS.OPTIMIZATIONS]: [],
   [STORAGE_KEYS.QUESTIONS]: [],
   [STORAGE_KEYS.ANSWERS]: [],
+  [STORAGE_KEYS.APPLICATIONS]: [],
 };
 
 /**
@@ -716,5 +720,201 @@ export const answerStorage = {
     if (filtered.length === answers.length) return false;
     setStorageData(STORAGE_KEYS.ANSWERS, filtered);
     return true;
+  },
+};
+
+// ==================== Phase 9: 投递跟踪操作 ====================
+
+export const applicationStorage = {
+  getAll(): Application[] {
+    return getStorageData<Application>(STORAGE_KEYS.APPLICATIONS);
+  },
+
+  getById(id: string): Application | undefined {
+    return this.getAll().find(app => app.id === id);
+  },
+
+  // 按状态筛选
+  getByStatus(status: ApplicationStatus): Application[] {
+    return this.getAll().filter(app => app.status === status);
+  },
+
+  // 按关联岗位筛选
+  getByJobId(jobId: string): Application | undefined {
+    return this.getAll().find(app => app.job_id === jobId);
+  },
+
+  // 搜索
+  search(keyword: string): Application[] {
+    const lower = keyword.toLowerCase();
+    return this.getAll().filter(app =>
+      app.company.toLowerCase().includes(lower) ||
+      app.position.toLowerCase().includes(lower) ||
+      app.tags.some(t => t.toLowerCase().includes(lower))
+    );
+  },
+
+  // 创建投递记录
+  create(data: Omit<Application, 'id' | 'status_history' | 'interviews' | 'created_at' | 'updated_at'>): Application {
+    const newApp: Application = {
+      ...data,
+      id: generateId(),
+      status_history: [{
+        status: data.status,
+        changed_at: now(),
+      }],
+      interviews: [],
+      tags: data.tags || [],
+      created_at: now(),
+      updated_at: now(),
+    };
+    const apps = this.getAll();
+    apps.unshift(newApp);
+    setStorageData(STORAGE_KEYS.APPLICATIONS, apps);
+    return newApp;
+  },
+
+  // 从岗位创建投递
+  createFromJob(job: Job, source?: string): Application {
+    return this.create({
+      job_id: job.id,
+      company: job.company || job.structured_jd?.company || '未知公司',
+      position: job.title || job.structured_jd?.title || '未知职位',
+      job_url: job.job_url,
+      status: 'applied',
+      applied_at: now(),
+      salary_range: job.structured_jd?.salary,
+      source,
+      tags: [],
+    });
+  },
+
+  // 更新投递记录
+  update(id: string, updates: Partial<Application>): Application | undefined {
+    const apps = this.getAll();
+    const index = apps.findIndex(app => app.id === id);
+    if (index === -1) return undefined;
+
+    apps[index] = {
+      ...apps[index],
+      ...updates,
+      updated_at: now(),
+    };
+    setStorageData(STORAGE_KEYS.APPLICATIONS, apps);
+    return apps[index];
+  },
+
+  // 更新状态（带历史记录）
+  updateStatus(id: string, status: ApplicationStatus, note?: string): Application | undefined {
+    const app = this.getById(id);
+    if (!app) return undefined;
+
+    const statusChange: StatusChange = {
+      status,
+      changed_at: now(),
+      note,
+    };
+
+    return this.update(id, {
+      status,
+      status_history: [...app.status_history, statusChange],
+    });
+  },
+
+  // 添加面试记录
+  addInterview(id: string, interview: Omit<InterviewRecord, 'id' | 'created_at'>): Application | undefined {
+    const app = this.getById(id);
+    if (!app) return undefined;
+
+    const newInterview: InterviewRecord = {
+      ...interview,
+      id: generateId(),
+      created_at: now(),
+    };
+
+    // 如果是新增面试，自动更新状态为面试中
+    const updates: Partial<Application> = {
+      interviews: [...app.interviews, newInterview],
+    };
+
+    if (app.status === 'applied' || app.status === 'screening') {
+      updates.status = 'interview';
+      updates.status_history = [...app.status_history, {
+        status: 'interview',
+        changed_at: now(),
+        note: `进入第${interview.round}轮面试`,
+      }];
+    }
+
+    return this.update(id, updates);
+  },
+
+  // 更新面试记录
+  updateInterview(appId: string, interviewId: string, updates: Partial<InterviewRecord>): Application | undefined {
+    const app = this.getById(appId);
+    if (!app) return undefined;
+
+    const interviews = app.interviews.map(i =>
+      i.id === interviewId ? { ...i, ...updates } : i
+    );
+
+    return this.update(appId, { interviews });
+  },
+
+  // 删除投递记录
+  delete(id: string): boolean {
+    const apps = this.getAll();
+    const filtered = apps.filter(app => app.id !== id);
+    if (filtered.length === apps.length) return false;
+    setStorageData(STORAGE_KEYS.APPLICATIONS, filtered);
+    return true;
+  },
+
+  // 获取统计数据
+  getStats(): ApplicationStats {
+    const apps = this.getAll();
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const monthAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const byStatus: Record<ApplicationStatus, number> = {
+      applied: 0,
+      screening: 0,
+      interview: 0,
+      offer: 0,
+      rejected: 0,
+      withdrawn: 0,
+    };
+
+    const bySource: Record<string, number> = {};
+    let thisWeek = 0;
+    let thisMonth = 0;
+
+    for (const app of apps) {
+      byStatus[app.status]++;
+      
+      if (app.source) {
+        bySource[app.source] = (bySource[app.source] || 0) + 1;
+      }
+
+      const appliedDate = new Date(app.applied_at);
+      if (appliedDate >= weekAgo) thisWeek++;
+      if (appliedDate >= monthAgo) thisMonth++;
+    }
+
+    const total = apps.length;
+    const interviewCount = byStatus.interview + byStatus.offer + byStatus.rejected;
+    const interviewRate = total > 0 ? (interviewCount / total) * 100 : 0;
+    const offerRate = total > 0 ? (byStatus.offer / total) * 100 : 0;
+
+    return {
+      total,
+      byStatus,
+      bySource,
+      interviewRate: Math.round(interviewRate * 10) / 10,
+      offerRate: Math.round(offerRate * 10) / 10,
+      thisWeek,
+      thisMonth,
+    };
   },
 };

@@ -13,6 +13,7 @@ import interviewRoutes from './routes/interview'
 import optimizeRoutes from './routes/optimize'
 import { metricsRoutes } from './routes/metrics'
 import questionRoutes from './routes/questions'
+import applicationRoutes from './routes/applications'
 
 // 创建应用实例
 const app = new Hono()
@@ -49,6 +50,9 @@ app.get('/', (c) => {
               </a>
               <a href="/questions" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-question-circle mr-1.5"></i><span class="hidden sm:inline">题库</span>
+              </a>
+              <a href="/applications" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-paper-plane mr-1.5"></i><span class="hidden sm:inline">投递</span>
               </a>
               <a href="/metrics" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-chart-bar mr-1.5"></i><span class="hidden sm:inline">评测</span>
@@ -146,9 +150,9 @@ app.get('/', (c) => {
         <div class="max-w-6xl mx-auto px-4 py-6">
           <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-400">
             <div class="flex items-center gap-4">
-              <span>Job Copilot v0.9.0</span>
+              <span>Job Copilot v1.0.0</span>
               <span class="hidden sm:inline">|</span>
-              <span class="hidden sm:inline">Phase 8 - 面试题库</span>
+              <span class="hidden sm:inline">Phase 9 - 投递跟踪</span>
             </div>
             <div class="flex items-center gap-4">
               <button onclick="JobCopilot.exportData()" class="hover:text-gray-600 transition-colors">
@@ -1151,6 +1155,9 @@ app.get('/job/:id', (c) => {
               <h1 id="page-title" class="text-lg font-bold truncate max-w-md">岗位详情</h1>
             </div>
             <div class="flex items-center gap-2">
+              <button id="action-apply" class="px-3 py-1.5 text-sm bg-black text-white rounded-lg hover:bg-gray-800">
+                <i class="fas fa-paper-plane mr-1"></i><span class="hidden sm:inline">投递</span>
+              </button>
               <a id="action-match" href="#" class="px-3 py-1.5 text-sm bg-blue-500 text-white rounded-lg hover:bg-blue-600">
                 <i class="fas fa-chart-pie mr-1"></i><span class="hidden sm:inline">匹配</span>
               </a>
@@ -1396,6 +1403,61 @@ app.get('/job/:id', (c) => {
             document.getElementById('action-match').href = '/job/' + jobId + '/match';
             document.getElementById('action-interview').href = '/job/' + jobId + '/interview';
             document.getElementById('action-optimize').href = '/job/' + jobId + '/optimize';
+            
+            // 投递按钮事件
+            document.getElementById('action-apply').addEventListener('click', function() {
+              var applications = JSON.parse(localStorage.getItem('jobcopilot_applications') || '[]');
+              
+              // 检查是否已投递
+              var existing = applications.find(function(app) { return app.job_id === jobId; });
+              if (existing) {
+                if (confirm('该岗位已有投递记录，是否查看详情？')) {
+                  window.location.href = '/applications/' + existing.id;
+                }
+                return;
+              }
+              
+              // 创建投递记录
+              var source = prompt('请输入投递渠道（如：Boss直聘、猎聘、内推等）：', 'Boss直聘');
+              if (source === null) return;
+              
+              var newApp = {
+                id: 'app_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                job_id: jobId,
+                company: job.company || job.structured_jd?.company || '未知公司',
+                position: job.title || job.structured_jd?.title || '未知职位',
+                job_url: job.job_url,
+                status: 'applied',
+                status_history: [{ status: 'applied', changed_at: new Date().toISOString() }],
+                interviews: [],
+                applied_at: new Date().toISOString(),
+                salary_range: job.structured_jd?.salary,
+                source: source || undefined,
+                tags: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              };
+              
+              applications.unshift(newApp);
+              localStorage.setItem('jobcopilot_applications', JSON.stringify(applications));
+              
+              alert('已添加投递记录！');
+              
+              // 更新按钮状态
+              this.innerHTML = '<i class="fas fa-check mr-1"></i><span class="hidden sm:inline">已投递</span>';
+              this.classList.remove('bg-black', 'hover:bg-gray-800');
+              this.classList.add('bg-green-500', 'hover:bg-green-600');
+            });
+            
+            // 检查投递状态
+            var applications = JSON.parse(localStorage.getItem('jobcopilot_applications') || '[]');
+            var existingApp = applications.find(function(app) { return app.job_id === jobId; });
+            if (existingApp) {
+              var applyBtn = document.getElementById('action-apply');
+              applyBtn.innerHTML = '<i class="fas fa-check mr-1"></i><span class="hidden sm:inline">已投递</span>';
+              applyBtn.classList.remove('bg-black', 'hover:bg-gray-800');
+              applyBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+            }
             
             // 定向简历按钮事件
             document.getElementById('action-targeted-resume').addEventListener('click', async function() {
@@ -1838,6 +1900,9 @@ app.get('/jobs', (c) => {
               </a>
               <a href="/questions" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-question-circle mr-1.5"></i><span class="hidden sm:inline">题库</span>
+              </a>
+              <a href="/applications" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-paper-plane mr-1.5"></i><span class="hidden sm:inline">投递</span>
               </a>
               <a href="/metrics" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
                 <i class="fas fa-chart-bar mr-1.5"></i><span class="hidden sm:inline">评测</span>
@@ -3933,6 +3998,845 @@ app.get('/questions/import', (c) => {
       }} />
     </div>,
     { title: '批量导入 - Job Copilot' }
+  )
+})
+
+// ==================== 投递跟踪页面（Phase 9 新增） ====================
+
+// 投递跟踪列表页（看板视图）
+app.get('/applications', (c) => {
+  return c.render(
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/" class="flex items-center gap-2 font-bold text-lg">
+              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
+                <i class="fas fa-robot"></i>
+              </span>
+              <span class="hidden sm:inline">Job Copilot</span>
+            </a>
+            <nav class="flex items-center gap-1">
+              <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-home mr-1.5"></i><span class="hidden sm:inline">首页</span>
+              </a>
+              <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
+              </a>
+              <a href="/resumes" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-folder-open mr-1.5"></i><span class="hidden sm:inline">简历库</span>
+              </a>
+              <a href="/questions" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
+                <i class="fas fa-question-circle mr-1.5"></i><span class="hidden sm:inline">题库</span>
+              </a>
+              <a href="/applications" class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-900">
+                <i class="fas fa-paper-plane mr-1.5"></i><span class="hidden sm:inline">投递</span>
+              </a>
+            </nav>
+            <button id="new-application-btn" class="px-3 py-1.5 bg-black text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
+              <i class="fas fa-plus mr-1"></i><span class="hidden sm:inline">新建</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
+        {/* 面包屑 */}
+        <nav class="flex items-center gap-2 text-sm text-gray-500 mb-6">
+          <a href="/" class="hover:text-gray-700"><i class="fas fa-home"></i></a>
+          <i class="fas fa-chevron-right text-xs text-gray-300"></i>
+          <span class="text-gray-900 font-medium">投递跟踪</span>
+        </nav>
+
+        {/* 统计卡片 */}
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+          <div class="bg-white border border-gray-200 rounded-xl p-4">
+            <div class="text-sm text-gray-500 mb-1">总投递</div>
+            <div class="text-2xl font-bold" id="stat-total">0</div>
+            <div class="text-xs text-gray-400 mt-1"><span id="stat-week">0</span> 本周</div>
+          </div>
+          <div class="bg-blue-50 border border-blue-100 rounded-xl p-4">
+            <div class="text-sm text-blue-600 mb-1">筛选中</div>
+            <div class="text-2xl font-bold text-blue-700" id="stat-screening">0</div>
+          </div>
+          <div class="bg-yellow-50 border border-yellow-100 rounded-xl p-4">
+            <div class="text-sm text-yellow-600 mb-1">面试中</div>
+            <div class="text-2xl font-bold text-yellow-700" id="stat-interview">0</div>
+          </div>
+          <div class="bg-green-50 border border-green-100 rounded-xl p-4">
+            <div class="text-sm text-green-600 mb-1">已获Offer</div>
+            <div class="text-2xl font-bold text-green-700" id="stat-offer">0</div>
+          </div>
+          <div class="bg-purple-50 border border-purple-100 rounded-xl p-4">
+            <div class="text-sm text-purple-600 mb-1">转化率</div>
+            <div class="text-2xl font-bold text-purple-700"><span id="stat-rate">0</span>%</div>
+          </div>
+        </div>
+
+        {/* 工具栏 */}
+        <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+          <div class="flex items-center gap-2">
+            <button id="view-kanban" class="px-3 py-1.5 bg-gray-100 text-gray-900 rounded-lg text-sm">
+              <i class="fas fa-columns mr-1"></i>看板
+            </button>
+            <button id="view-list" class="px-3 py-1.5 text-gray-600 hover:bg-gray-50 rounded-lg text-sm">
+              <i class="fas fa-list mr-1"></i>列表
+            </button>
+          </div>
+          <div class="flex items-center gap-2 flex-1 max-w-md">
+            <div class="relative flex-1">
+              <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+              <input type="text" id="search-input" placeholder="搜索公司或职位..."
+                class="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm" />
+            </div>
+            <select id="filter-source" class="px-3 py-2 border border-gray-200 rounded-lg text-sm">
+              <option value="">全部渠道</option>
+              <option value="Boss直聘">Boss直聘</option>
+              <option value="猎聘">猎聘</option>
+              <option value="拉勾">拉勾</option>
+              <option value="智联招聘">智联招聘</option>
+              <option value="官网">官网</option>
+              <option value="内推">内推</option>
+              <option value="其他">其他</option>
+            </select>
+            <button id="export-btn" class="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg text-sm hover:bg-gray-50">
+              <i class="fas fa-download"></i>
+            </button>
+          </div>
+        </div>
+
+        {/* 看板视图 */}
+        <div id="kanban-view" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+          {/* 已投递 */}
+          <div class="bg-gray-50 rounded-xl p-3" data-status="applied">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-medium text-gray-700">
+                <i class="fas fa-paper-plane mr-1.5 text-gray-400"></i>
+                已投递 <span class="count text-gray-400">(0)</span>
+              </h3>
+            </div>
+            <div class="space-y-2 cards min-h-[100px]"></div>
+          </div>
+          
+          {/* 筛选中 */}
+          <div class="bg-blue-50/50 rounded-xl p-3" data-status="screening">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-medium text-blue-700">
+                <i class="fas fa-search mr-1.5 text-blue-400"></i>
+                筛选中 <span class="count text-blue-400">(0)</span>
+              </h3>
+            </div>
+            <div class="space-y-2 cards min-h-[100px]"></div>
+          </div>
+          
+          {/* 面试中 */}
+          <div class="bg-yellow-50/50 rounded-xl p-3" data-status="interview">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-medium text-yellow-700">
+                <i class="fas fa-user-tie mr-1.5 text-yellow-400"></i>
+                面试中 <span class="count text-yellow-400">(0)</span>
+              </h3>
+            </div>
+            <div class="space-y-2 cards min-h-[100px]"></div>
+          </div>
+          
+          {/* 已获Offer */}
+          <div class="bg-green-50/50 rounded-xl p-3" data-status="offer">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-medium text-green-700">
+                <i class="fas fa-trophy mr-1.5 text-green-400"></i>
+                Offer <span class="count text-green-400">(0)</span>
+              </h3>
+            </div>
+            <div class="space-y-2 cards min-h-[100px]"></div>
+          </div>
+          
+          {/* 已拒绝 */}
+          <div class="bg-red-50/50 rounded-xl p-3" data-status="rejected">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-medium text-red-700">
+                <i class="fas fa-times-circle mr-1.5 text-red-400"></i>
+                已拒 <span class="count text-red-400">(0)</span>
+              </h3>
+            </div>
+            <div class="space-y-2 cards min-h-[100px]"></div>
+          </div>
+          
+          {/* 已撤回 */}
+          <div class="bg-gray-100/50 rounded-xl p-3" data-status="withdrawn">
+            <div class="flex items-center justify-between mb-3">
+              <h3 class="font-medium text-gray-500">
+                <i class="fas fa-undo mr-1.5 text-gray-400"></i>
+                已撤 <span class="count text-gray-400">(0)</span>
+              </h3>
+            </div>
+            <div class="space-y-2 cards min-h-[100px]"></div>
+          </div>
+        </div>
+
+        {/* 列表视图 */}
+        <div id="list-view" class="hidden">
+          <div class="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">公司/职位</th>
+                  <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">状态</th>
+                  <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">渠道</th>
+                  <th class="px-4 py-3 text-left text-sm font-medium text-gray-600">投递时间</th>
+                  <th class="px-4 py-3 text-right text-sm font-medium text-gray-600">操作</th>
+                </tr>
+              </thead>
+              <tbody id="list-body" class="divide-y divide-gray-100"></tbody>
+            </table>
+          </div>
+        </div>
+
+        {/* 空状态 */}
+        <div id="empty-state" class="hidden text-center py-16">
+          <div class="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <i class="fas fa-paper-plane text-3xl text-gray-400"></i>
+          </div>
+          <h3 class="text-lg font-medium text-gray-900 mb-2">暂无投递记录</h3>
+          <p class="text-gray-500 mb-4">开始记录你的求职投递</p>
+          <button id="empty-new-btn" class="inline-flex items-center px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800">
+            <i class="fas fa-plus mr-2"></i>添加投递
+          </button>
+        </div>
+      </main>
+
+      {/* 新建投递弹窗 */}
+      <div id="new-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-md mx-4 overflow-hidden">
+          <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="font-semibold">新建投递记录</h3>
+            <button id="close-modal" class="text-gray-400 hover:text-gray-600">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <form id="new-form" class="p-4 space-y-4">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">公司名称 *</label>
+              <input type="text" id="input-company" required
+                class="w-full px-3 py-2 border border-gray-200 rounded-lg" placeholder="如：字节跳动" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">职位名称 *</label>
+              <input type="text" id="input-position" required
+                class="w-full px-3 py-2 border border-gray-200 rounded-lg" placeholder="如：产品经理" />
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">投递渠道</label>
+                <select id="input-source" class="w-full px-3 py-2 border border-gray-200 rounded-lg">
+                  <option value="">请选择</option>
+                  <option value="Boss直聘">Boss直聘</option>
+                  <option value="猎聘">猎聘</option>
+                  <option value="拉勾">拉勾</option>
+                  <option value="智联招聘">智联招聘</option>
+                  <option value="官网">官网</option>
+                  <option value="内推">内推</option>
+                  <option value="其他">其他</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">投递日期</label>
+                <input type="date" id="input-date" class="w-full px-3 py-2 border border-gray-200 rounded-lg" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">职位链接</label>
+              <input type="url" id="input-url"
+                class="w-full px-3 py-2 border border-gray-200 rounded-lg" placeholder="https://..." />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">薪资范围</label>
+              <input type="text" id="input-salary"
+                class="w-full px-3 py-2 border border-gray-200 rounded-lg" placeholder="如：25-35K" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">备注</label>
+              <textarea id="input-notes" rows={2}
+                class="w-full px-3 py-2 border border-gray-200 rounded-lg" placeholder="其他备注信息..."></textarea>
+            </div>
+            <div class="flex gap-3 pt-2">
+              <button type="button" id="cancel-btn" class="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50">
+                取消
+              </button>
+              <button type="submit" class="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800">
+                <i class="fas fa-plus mr-1"></i>添加
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      {/* 页脚 */}
+      <footer class="border-t border-gray-100 mt-auto">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+          <div class="text-sm text-gray-400 text-center">
+            Job Copilot v1.0.0 - Phase 9 投递跟踪
+          </div>
+        </div>
+      </footer>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            var applications = JSON.parse(localStorage.getItem('jobcopilot_applications') || '[]');
+            
+            var statusLabels = {
+              'applied': '已投递',
+              'screening': '筛选中',
+              'interview': '面试中',
+              'offer': '已获Offer',
+              'rejected': '已拒绝',
+              'withdrawn': '已撤回'
+            };
+            
+            var statusColors = {
+              'applied': 'bg-gray-100 text-gray-600',
+              'screening': 'bg-blue-100 text-blue-600',
+              'interview': 'bg-yellow-100 text-yellow-600',
+              'offer': 'bg-green-100 text-green-600',
+              'rejected': 'bg-red-100 text-red-600',
+              'withdrawn': 'bg-gray-200 text-gray-500'
+            };
+            
+            function formatDate(dateStr) {
+              if (!dateStr) return '';
+              var date = new Date(dateStr);
+              return (date.getMonth() + 1) + '-' + date.getDate();
+            }
+            
+            function updateStats() {
+              var stats = { total: 0, applied: 0, screening: 0, interview: 0, offer: 0, rejected: 0, withdrawn: 0 };
+              var weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+              var weekCount = 0;
+              
+              applications.forEach(function(app) {
+                stats.total++;
+                stats[app.status]++;
+                if (new Date(app.applied_at) >= weekAgo) weekCount++;
+              });
+              
+              document.getElementById('stat-total').textContent = stats.total;
+              document.getElementById('stat-week').textContent = weekCount;
+              document.getElementById('stat-screening').textContent = stats.screening;
+              document.getElementById('stat-interview').textContent = stats.interview;
+              document.getElementById('stat-offer').textContent = stats.offer;
+              
+              var interviewTotal = stats.interview + stats.offer + stats.rejected;
+              var rate = stats.total > 0 ? Math.round((stats.offer / stats.total) * 1000) / 10 : 0;
+              document.getElementById('stat-rate').textContent = rate;
+            }
+            
+            function renderKanban() {
+              var search = document.getElementById('search-input').value.toLowerCase();
+              var source = document.getElementById('filter-source').value;
+              
+              var filtered = applications.filter(function(app) {
+                if (search && !app.company.toLowerCase().includes(search) && !app.position.toLowerCase().includes(search)) return false;
+                if (source && app.source !== source) return false;
+                return true;
+              });
+              
+              // 清空所有卡片
+              document.querySelectorAll('[data-status] .cards').forEach(function(container) {
+                container.innerHTML = '';
+              });
+              
+              // 更新计数
+              var counts = { applied: 0, screening: 0, interview: 0, offer: 0, rejected: 0, withdrawn: 0 };
+              
+              filtered.forEach(function(app) {
+                counts[app.status]++;
+                var container = document.querySelector('[data-status="' + app.status + '"] .cards');
+                if (!container) return;
+                
+                var card = document.createElement('a');
+                card.href = '/applications/' + app.id;
+                card.className = 'block bg-white rounded-lg p-3 shadow-sm border border-gray-100 hover:shadow-md transition-shadow';
+                card.innerHTML = 
+                  '<div class="font-medium text-sm text-gray-900 truncate">' + app.company + '</div>' +
+                  '<div class="text-xs text-gray-500 truncate mt-0.5">' + app.position + '</div>' +
+                  '<div class="flex items-center justify-between mt-2">' +
+                    '<span class="text-xs text-gray-400">' + formatDate(app.applied_at) + '</span>' +
+                    (app.source ? '<span class="text-xs px-1.5 py-0.5 bg-gray-100 text-gray-500 rounded">' + app.source + '</span>' : '') +
+                  '</div>';
+                container.appendChild(card);
+              });
+              
+              // 更新计数显示
+              Object.keys(counts).forEach(function(status) {
+                var countEl = document.querySelector('[data-status="' + status + '"] .count');
+                if (countEl) countEl.textContent = '(' + counts[status] + ')';
+              });
+              
+              // 空状态
+              var emptyState = document.getElementById('empty-state');
+              var kanbanView = document.getElementById('kanban-view');
+              if (applications.length === 0) {
+                emptyState.classList.remove('hidden');
+                kanbanView.classList.add('hidden');
+              } else {
+                emptyState.classList.add('hidden');
+                kanbanView.classList.remove('hidden');
+              }
+            }
+            
+            function renderList() {
+              var search = document.getElementById('search-input').value.toLowerCase();
+              var source = document.getElementById('filter-source').value;
+              
+              var filtered = applications.filter(function(app) {
+                if (search && !app.company.toLowerCase().includes(search) && !app.position.toLowerCase().includes(search)) return false;
+                if (source && app.source !== source) return false;
+                return true;
+              });
+              
+              var tbody = document.getElementById('list-body');
+              tbody.innerHTML = filtered.map(function(app) {
+                return '<tr class="hover:bg-gray-50">' +
+                  '<td class="px-4 py-3">' +
+                    '<a href="/applications/' + app.id + '" class="font-medium text-gray-900 hover:text-blue-600">' + app.company + '</a>' +
+                    '<div class="text-sm text-gray-500">' + app.position + '</div>' +
+                  '</td>' +
+                  '<td class="px-4 py-3">' +
+                    '<span class="px-2 py-1 text-xs rounded-full ' + statusColors[app.status] + '">' + statusLabels[app.status] + '</span>' +
+                  '</td>' +
+                  '<td class="px-4 py-3 text-sm text-gray-500">' + (app.source || '-') + '</td>' +
+                  '<td class="px-4 py-3 text-sm text-gray-500">' + formatDate(app.applied_at) + '</td>' +
+                  '<td class="px-4 py-3 text-right">' +
+                    '<a href="/applications/' + app.id + '" class="text-blue-600 hover:text-blue-800 text-sm">查看</a>' +
+                  '</td>' +
+                '</tr>';
+              }).join('');
+            }
+            
+            function render() {
+              updateStats();
+              renderKanban();
+              renderList();
+            }
+            
+            // 视图切换
+            document.getElementById('view-kanban').onclick = function() {
+              document.getElementById('kanban-view').classList.remove('hidden');
+              document.getElementById('list-view').classList.add('hidden');
+              this.classList.add('bg-gray-100', 'text-gray-900');
+              this.classList.remove('text-gray-600');
+              document.getElementById('view-list').classList.remove('bg-gray-100', 'text-gray-900');
+              document.getElementById('view-list').classList.add('text-gray-600');
+            };
+            
+            document.getElementById('view-list').onclick = function() {
+              document.getElementById('list-view').classList.remove('hidden');
+              document.getElementById('kanban-view').classList.add('hidden');
+              this.classList.add('bg-gray-100', 'text-gray-900');
+              this.classList.remove('text-gray-600');
+              document.getElementById('view-kanban').classList.remove('bg-gray-100', 'text-gray-900');
+              document.getElementById('view-kanban').classList.add('text-gray-600');
+            };
+            
+            // 搜索和筛选
+            document.getElementById('search-input').oninput = render;
+            document.getElementById('filter-source').onchange = render;
+            
+            // 新建弹窗
+            var modal = document.getElementById('new-modal');
+            function openModal() { modal.classList.remove('hidden'); }
+            function closeModal() { modal.classList.add('hidden'); }
+            
+            document.getElementById('new-application-btn').onclick = openModal;
+            document.getElementById('empty-new-btn').onclick = openModal;
+            document.getElementById('close-modal').onclick = closeModal;
+            document.getElementById('cancel-btn').onclick = closeModal;
+            modal.onclick = function(e) { if (e.target === modal) closeModal(); };
+            
+            // 设置默认日期
+            document.getElementById('input-date').value = new Date().toISOString().slice(0, 10);
+            
+            // 提交新建
+            document.getElementById('new-form').onsubmit = function(e) {
+              e.preventDefault();
+              
+              var newApp = {
+                id: 'app_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+                company: document.getElementById('input-company').value.trim(),
+                position: document.getElementById('input-position').value.trim(),
+                source: document.getElementById('input-source').value || undefined,
+                applied_at: document.getElementById('input-date').value || new Date().toISOString(),
+                job_url: document.getElementById('input-url').value.trim() || undefined,
+                salary_range: document.getElementById('input-salary').value.trim() || undefined,
+                notes: document.getElementById('input-notes').value.trim() || undefined,
+                status: 'applied',
+                status_history: [{ status: 'applied', changed_at: new Date().toISOString() }],
+                interviews: [],
+                tags: [],
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              };
+              
+              applications.unshift(newApp);
+              localStorage.setItem('jobcopilot_applications', JSON.stringify(applications));
+              
+              closeModal();
+              document.getElementById('new-form').reset();
+              document.getElementById('input-date').value = new Date().toISOString().slice(0, 10);
+              render();
+            };
+            
+            // 导出
+            document.getElementById('export-btn').onclick = function() {
+              var data = JSON.stringify(applications, null, 2);
+              var blob = new Blob([data], { type: 'application/json' });
+              var url = URL.createObjectURL(blob);
+              var a = document.createElement('a');
+              a.href = url;
+              a.download = 'applications_' + new Date().toISOString().slice(0, 10) + '.json';
+              a.click();
+              URL.revokeObjectURL(url);
+            };
+            
+            render();
+          });
+        `
+      }} />
+    </div>,
+    { title: '投递跟踪 - Job Copilot' }
+  )
+})
+
+// 投递详情页
+app.get('/applications/:id', (c) => {
+  const appId = c.req.param('id')
+  
+  return c.render(
+    <div class="min-h-screen bg-white flex flex-col">
+      {/* 导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <a href="/applications" class="flex items-center gap-2 text-gray-600 hover:text-gray-900">
+              <i class="fas fa-arrow-left"></i>
+              <span>返回列表</span>
+            </a>
+            <button id="delete-btn" class="px-3 py-1.5 text-red-600 hover:bg-red-50 rounded-lg text-sm">
+              <i class="fas fa-trash mr-1"></i>删除
+            </button>
+          </div>
+        </div>
+      </header>
+
+      <main class="flex-1 max-w-4xl mx-auto px-4 py-8 w-full">
+        {/* 基础信息 */}
+        <div id="app-header" class="mb-8">
+          <div class="skeleton h-8 w-1/2 mb-2"></div>
+          <div class="skeleton h-6 w-1/3"></div>
+        </div>
+
+        {/* 状态更新 */}
+        <div class="mb-8">
+          <h2 class="text-lg font-semibold mb-4">投递状态</h2>
+          <div class="flex flex-wrap gap-2" id="status-buttons">
+            <button data-status="applied" class="px-4 py-2 rounded-lg border text-sm status-btn">
+              <i class="fas fa-paper-plane mr-1"></i>已投递
+            </button>
+            <button data-status="screening" class="px-4 py-2 rounded-lg border text-sm status-btn">
+              <i class="fas fa-search mr-1"></i>筛选中
+            </button>
+            <button data-status="interview" class="px-4 py-2 rounded-lg border text-sm status-btn">
+              <i class="fas fa-user-tie mr-1"></i>面试中
+            </button>
+            <button data-status="offer" class="px-4 py-2 rounded-lg border text-sm status-btn">
+              <i class="fas fa-trophy mr-1"></i>已获Offer
+            </button>
+            <button data-status="rejected" class="px-4 py-2 rounded-lg border text-sm status-btn">
+              <i class="fas fa-times-circle mr-1"></i>已拒绝
+            </button>
+            <button data-status="withdrawn" class="px-4 py-2 rounded-lg border text-sm status-btn">
+              <i class="fas fa-undo mr-1"></i>已撤回
+            </button>
+          </div>
+        </div>
+
+        {/* 面试记录 */}
+        <div class="mb-8">
+          <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-semibold">面试记录</h2>
+            <button id="add-interview-btn" class="px-3 py-1.5 bg-black text-white rounded-lg text-sm hover:bg-gray-800">
+              <i class="fas fa-plus mr-1"></i>添加面试
+            </button>
+          </div>
+          <div id="interviews-list" class="space-y-3">
+            <div class="text-center py-8 text-gray-400">
+              <i class="fas fa-calendar-alt text-2xl mb-2"></i>
+              <p>暂无面试记录</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 状态历史 */}
+        <div class="mb-8">
+          <h2 class="text-lg font-semibold mb-4">状态历史</h2>
+          <div id="status-history" class="space-y-2"></div>
+        </div>
+
+        {/* 备注 */}
+        <div class="mb-8">
+          <h2 class="text-lg font-semibold mb-4">备注</h2>
+          <textarea id="notes-input" rows={4}
+            class="w-full px-4 py-3 border border-gray-200 rounded-xl resize-y"
+            placeholder="添加备注..."></textarea>
+          <button id="save-notes" class="mt-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm hover:bg-gray-200">
+            保存备注
+          </button>
+        </div>
+      </main>
+
+      {/* 添加面试弹窗 */}
+      <div id="interview-modal" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50 hidden">
+        <div class="bg-white rounded-2xl w-full max-w-md mx-4 overflow-hidden">
+          <div class="p-4 border-b border-gray-100 flex items-center justify-between">
+            <h3 class="font-semibold">添加面试记录</h3>
+            <button id="close-interview-modal" class="text-gray-400 hover:text-gray-600">
+              <i class="fas fa-times"></i>
+            </button>
+          </div>
+          <form id="interview-form" class="p-4 space-y-4">
+            <div class="grid grid-cols-2 gap-4">
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">面试轮次 *</label>
+                <select id="interview-round" required class="w-full px-3 py-2 border border-gray-200 rounded-lg">
+                  <option value="1">一面</option>
+                  <option value="2">二面</option>
+                  <option value="3">三面</option>
+                  <option value="4">四面</option>
+                  <option value="5">HR面</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1">面试类型 *</label>
+                <select id="interview-type" required class="w-full px-3 py-2 border border-gray-200 rounded-lg">
+                  <option value="phone">电话面试</option>
+                  <option value="video">视频面试</option>
+                  <option value="onsite">现场面试</option>
+                  <option value="written">笔试</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">面试时间</label>
+              <input type="datetime-local" id="interview-time" class="w-full px-3 py-2 border border-gray-200 rounded-lg" />
+            </div>
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">面试官</label>
+              <input type="text" id="interview-interviewer" class="w-full px-3 py-2 border border-gray-200 rounded-lg" placeholder="如：技术总监" />
+            </div>
+            <div class="flex gap-3 pt-2">
+              <button type="button" id="cancel-interview" class="flex-1 px-4 py-2 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50">
+                取消
+              </button>
+              <button type="submit" class="flex-1 px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800">
+                添加
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          document.addEventListener('DOMContentLoaded', function() {
+            var appId = '${appId}';
+            var applications = JSON.parse(localStorage.getItem('jobcopilot_applications') || '[]');
+            var app = applications.find(function(a) { return a.id === appId; });
+            
+            if (!app) {
+              document.getElementById('app-header').innerHTML = '<p class="text-red-500">投递记录不存在</p>';
+              return;
+            }
+            
+            var statusLabels = {
+              'applied': '已投递',
+              'screening': '筛选中',
+              'interview': '面试中',
+              'offer': '已获Offer',
+              'rejected': '已拒绝',
+              'withdrawn': '已撤回'
+            };
+            
+            var statusColors = {
+              'applied': 'bg-gray-100 text-gray-700 border-gray-300',
+              'screening': 'bg-blue-100 text-blue-700 border-blue-300',
+              'interview': 'bg-yellow-100 text-yellow-700 border-yellow-300',
+              'offer': 'bg-green-100 text-green-700 border-green-300',
+              'rejected': 'bg-red-100 text-red-700 border-red-300',
+              'withdrawn': 'bg-gray-200 text-gray-600 border-gray-400'
+            };
+            
+            var interviewTypeLabels = {
+              'phone': '电话面试',
+              'video': '视频面试',
+              'onsite': '现场面试',
+              'written': '笔试'
+            };
+            
+            function render() {
+              // 头部信息
+              document.getElementById('app-header').innerHTML = 
+                '<h1 class="text-2xl font-bold mb-2">' + app.company + '</h1>' +
+                '<p class="text-lg text-gray-600">' + app.position + '</p>' +
+                '<div class="flex flex-wrap items-center gap-3 mt-3">' +
+                  '<span class="px-3 py-1 rounded-full text-sm ' + statusColors[app.status] + '">' + statusLabels[app.status] + '</span>' +
+                  (app.source ? '<span class="text-sm text-gray-500"><i class="fas fa-share-alt mr-1"></i>' + app.source + '</span>' : '') +
+                  '<span class="text-sm text-gray-500"><i class="fas fa-calendar mr-1"></i>' + new Date(app.applied_at).toLocaleDateString('zh-CN') + '</span>' +
+                  (app.salary_range ? '<span class="text-sm text-gray-500"><i class="fas fa-money-bill mr-1"></i>' + app.salary_range + '</span>' : '') +
+                  (app.job_url ? '<a href="' + app.job_url + '" target="_blank" class="text-sm text-blue-600 hover:text-blue-800"><i class="fas fa-external-link-alt mr-1"></i>查看原帖</a>' : '') +
+                '</div>';
+              
+              // 状态按钮
+              document.querySelectorAll('.status-btn').forEach(function(btn) {
+                var status = btn.dataset.status;
+                btn.className = 'px-4 py-2 rounded-lg border text-sm status-btn transition-colors ' +
+                  (status === app.status ? statusColors[status] + ' border-2' : 'border-gray-200 text-gray-600 hover:bg-gray-50');
+              });
+              
+              // 面试记录
+              var interviewsList = document.getElementById('interviews-list');
+              if (app.interviews && app.interviews.length > 0) {
+                interviewsList.innerHTML = app.interviews.map(function(interview) {
+                  var roundText = ['', '一面', '二面', '三面', '四面', 'HR面'][interview.round] || '第' + interview.round + '轮';
+                  return '<div class="border border-gray-200 rounded-xl p-4">' +
+                    '<div class="flex items-center justify-between mb-2">' +
+                      '<span class="font-medium">' + roundText + ' - ' + interviewTypeLabels[interview.type] + '</span>' +
+                      (interview.result ? '<span class="px-2 py-0.5 text-xs rounded-full ' + 
+                        (interview.result === 'passed' ? 'bg-green-100 text-green-600' : 
+                         interview.result === 'failed' ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600') + '">' +
+                        (interview.result === 'passed' ? '通过' : interview.result === 'failed' ? '未通过' : '待定') + '</span>' : '') +
+                    '</div>' +
+                    (interview.scheduled_at ? '<p class="text-sm text-gray-500 mb-1"><i class="fas fa-clock mr-1"></i>' + new Date(interview.scheduled_at).toLocaleString('zh-CN') + '</p>' : '') +
+                    (interview.interviewer ? '<p class="text-sm text-gray-500"><i class="fas fa-user mr-1"></i>' + interview.interviewer + '</p>' : '') +
+                    (interview.feedback ? '<p class="text-sm text-gray-600 mt-2 bg-gray-50 p-2 rounded">' + interview.feedback + '</p>' : '') +
+                  '</div>';
+                }).join('');
+              } else {
+                interviewsList.innerHTML = '<div class="text-center py-8 text-gray-400">' +
+                  '<i class="fas fa-calendar-alt text-2xl mb-2"></i>' +
+                  '<p>暂无面试记录</p>' +
+                '</div>';
+              }
+              
+              // 状态历史
+              var historyHtml = (app.status_history || []).slice().reverse().map(function(h, i) {
+                return '<div class="flex items-start gap-3">' +
+                  '<div class="w-2 h-2 rounded-full bg-gray-300 mt-2"></div>' +
+                  '<div>' +
+                    '<span class="font-medium text-sm">' + statusLabels[h.status] + '</span>' +
+                    '<span class="text-xs text-gray-400 ml-2">' + new Date(h.changed_at).toLocaleString('zh-CN') + '</span>' +
+                    (h.note ? '<p class="text-sm text-gray-500 mt-0.5">' + h.note + '</p>' : '') +
+                  '</div>' +
+                '</div>';
+              }).join('');
+              document.getElementById('status-history').innerHTML = historyHtml || '<p class="text-gray-400">暂无状态变更记录</p>';
+              
+              // 备注
+              document.getElementById('notes-input').value = app.notes || '';
+            }
+            
+            // 状态按钮点击
+            document.querySelectorAll('.status-btn').forEach(function(btn) {
+              btn.onclick = function() {
+                var newStatus = btn.dataset.status;
+                if (newStatus === app.status) return;
+                
+                app.status = newStatus;
+                app.status_history = app.status_history || [];
+                app.status_history.push({
+                  status: newStatus,
+                  changed_at: new Date().toISOString()
+                });
+                app.updated_at = new Date().toISOString();
+                
+                localStorage.setItem('jobcopilot_applications', JSON.stringify(applications));
+                render();
+              };
+            });
+            
+            // 保存备注
+            document.getElementById('save-notes').onclick = function() {
+              app.notes = document.getElementById('notes-input').value.trim();
+              app.updated_at = new Date().toISOString();
+              localStorage.setItem('jobcopilot_applications', JSON.stringify(applications));
+              alert('备注已保存');
+            };
+            
+            // 删除
+            document.getElementById('delete-btn').onclick = function() {
+              if (confirm('确定要删除这条投递记录吗？')) {
+                applications = applications.filter(function(a) { return a.id !== appId; });
+                localStorage.setItem('jobcopilot_applications', JSON.stringify(applications));
+                window.location.href = '/applications';
+              }
+            };
+            
+            // 添加面试弹窗
+            var interviewModal = document.getElementById('interview-modal');
+            document.getElementById('add-interview-btn').onclick = function() {
+              interviewModal.classList.remove('hidden');
+            };
+            document.getElementById('close-interview-modal').onclick = function() {
+              interviewModal.classList.add('hidden');
+            };
+            document.getElementById('cancel-interview').onclick = function() {
+              interviewModal.classList.add('hidden');
+            };
+            interviewModal.onclick = function(e) {
+              if (e.target === interviewModal) interviewModal.classList.add('hidden');
+            };
+            
+            document.getElementById('interview-form').onsubmit = function(e) {
+              e.preventDefault();
+              
+              var newInterview = {
+                id: 'int_' + Date.now(),
+                round: parseInt(document.getElementById('interview-round').value),
+                type: document.getElementById('interview-type').value,
+                scheduled_at: document.getElementById('interview-time').value || undefined,
+                interviewer: document.getElementById('interview-interviewer').value.trim() || undefined,
+                result: 'pending',
+                created_at: new Date().toISOString()
+              };
+              
+              app.interviews = app.interviews || [];
+              app.interviews.push(newInterview);
+              
+              // 自动更新状态为面试中
+              if (app.status === 'applied' || app.status === 'screening') {
+                app.status = 'interview';
+                app.status_history.push({
+                  status: 'interview',
+                  changed_at: new Date().toISOString(),
+                  note: '进入第' + newInterview.round + '轮面试'
+                });
+              }
+              
+              app.updated_at = new Date().toISOString();
+              localStorage.setItem('jobcopilot_applications', JSON.stringify(applications));
+              
+              interviewModal.classList.add('hidden');
+              document.getElementById('interview-form').reset();
+              render();
+            };
+            
+            render();
+          });
+        `
+      }} />
+    </div>,
+    { title: '投递详情 - Job Copilot' }
   )
 })
 
@@ -6386,13 +7290,16 @@ app.route('/api/metrics', metricsRoutes)
 // 挂载面试题库相关路由
 app.route('/api/questions', questionRoutes)
 
+// 挂载投递跟踪相关路由
+app.route('/api/applications', applicationRoutes)
+
 // API健康检查
 app.get('/api/health', (c) => {
   return c.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '0.9.0',
-    phase: 'Phase 8 - 面试题库',
+    version: '1.0.0',
+    phase: 'Phase 9 - 投递跟踪',
   })
 })
 
