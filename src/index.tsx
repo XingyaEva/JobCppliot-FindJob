@@ -2829,10 +2829,13 @@ app.get('/resume/:id', (c) => {
                 '</div>' +
                 // 操作按钮
                 '<div class="flex flex-wrap gap-3 mt-4">' +
+                  '<a href="/resume/' + resumeId + '/edit" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">' +
+                    '<i class="fas fa-edit mr-1"></i>编辑简历' +
+                  '</a>' +
                   '<a href="/resume/' + resumeId + '/versions" class="px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm hover:bg-gray-50">' +
                     '<i class="fas fa-history mr-1"></i>版本历史' +
                   '</a>' +
-                  '<a href="/jobs" class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm hover:bg-blue-600">' +
+                  '<a href="/jobs" class="px-4 py-2 bg-green-500 text-white rounded-lg text-sm hover:bg-green-600">' +
                     '<i class="fas fa-search mr-1"></i>去匹配岗位' +
                   '</a>' +
                 '</div>' +
@@ -2910,6 +2913,731 @@ app.get('/resume/:id', (c) => {
       }} />
     </div>,
     { title: '简历详情 - Job Copilot' }
+  )
+})
+
+// 简历编辑器页面
+app.get('/resume/:id/edit', (c) => {
+  const resumeId = c.req.param('id')
+  
+  return c.render(
+    <div class="min-h-screen bg-gray-50">
+      {/* 顶部导航栏 */}
+      <header class="sticky top-0 z-50 bg-white border-b shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div class="flex items-center gap-4">
+            <a href={`/resume/${resumeId}`} class="text-gray-600 hover:text-gray-900 flex items-center">
+              <i class="fas fa-arrow-left mr-2"></i>
+              <span class="hidden sm:inline">返回</span>
+            </a>
+            <h1 class="text-lg font-semibold">编辑简历</h1>
+            <span id="save-status" class="text-sm text-gray-500">已保存</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button id="save-btn" class="px-3 py-1.5 sm:px-4 sm:py-2 bg-blue-500 text-white text-sm rounded-lg hover:bg-blue-600 transition-colors">
+              <i class="fas fa-save mr-1"></i>
+              <span class="hidden sm:inline">保存</span>
+            </button>
+            <button id="export-pdf-btn" class="px-3 py-1.5 sm:px-4 sm:py-2 bg-green-500 text-white text-sm rounded-lg hover:bg-green-600 transition-colors">
+              <i class="fas fa-file-pdf mr-1"></i>
+              <span class="hidden sm:inline">导出PDF</span>
+            </button>
+          </div>
+        </div>
+      </header>
+
+      {/* 主编辑区 */}
+      <div class="max-w-7xl mx-auto px-4 py-6">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* 左侧编辑表单 */}
+          <div class="space-y-4">
+            <div id="editor-container">
+              {/* 加载状态 */}
+              <div class="text-center py-12">
+                <i class="fas fa-spinner loading-spinner text-3xl text-gray-400 mb-4"></i>
+                <p class="text-gray-500">加载中...</p>
+              </div>
+            </div>
+          </div>
+
+          {/* 右侧预览区 */}
+          <div class="lg:sticky lg:top-24">
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+              <div class="flex items-center justify-between p-4 border-b bg-gray-50">
+                <h3 class="font-semibold text-gray-700">实时预览</h3>
+                <select id="template-selector" class="text-sm border rounded px-2 py-1 bg-white">
+                  <option value="classic">经典模板</option>
+                  <option value="modern">现代模板</option>
+                  <option value="timeline">时间线模板</option>
+                </select>
+              </div>
+              <div id="preview-container" class="p-6 bg-white overflow-auto" style="max-height: 800px;">
+                {/* 预览内容 */}
+                <div class="text-center py-12">
+                  <i class="fas fa-spinner loading-spinner text-3xl text-gray-400 mb-4"></i>
+                  <p class="text-gray-500">生成预览中...</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 编辑器 JavaScript */}
+      <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+      <script dangerouslySetInnerHTML={{
+        __html: `
+          (function() {
+            const resumeId = '${resumeId}';
+            let resume = null;
+            let isDirty = false;
+
+            // 从 localStorage 加载简历
+            function loadResume() {
+              const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+              resume = resumes.find(r => r.id === resumeId);
+              
+              if (!resume) {
+                alert('简历不存在');
+                window.location.href = '/resume';
+                return;
+              }
+
+              renderEditor(resume);
+              renderPreview(resume);
+            }
+
+            // 渲染编辑器表单
+            function renderEditor(resume) {
+              const container = document.getElementById('editor-container');
+              container.innerHTML = 
+                // 基本信息
+                '<div class="bg-white rounded-lg shadow p-6">' +
+                  '<h3 class="text-lg font-semibold mb-4 flex items-center">' +
+                    '<i class="fas fa-user mr-2 text-blue-500"></i>基本信息' +
+                  '</h3>' +
+                  '<div class="space-y-3">' +
+                    '<div>' +
+                      '<label class="block text-sm font-medium text-gray-700 mb-1">姓名</label>' +
+                      '<input type="text" id="input-name" value="' + (resume.basic_info?.name || '') + '" ' +
+                             'class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />' +
+                    '</div>' +
+                    '<div>' +
+                      '<label class="block text-sm font-medium text-gray-700 mb-1">联系方式</label>' +
+                      '<input type="text" id="input-contact" value="' + (resume.basic_info?.contact || '') + '" ' +
+                             'class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />' +
+                    '</div>' +
+                    '<div>' +
+                      '<label class="block text-sm font-medium text-gray-700 mb-1">目标岗位</label>' +
+                      '<input type="text" id="input-target" value="' + (resume.basic_info?.target_position || '') + '" ' +
+                             'class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" />' +
+                    '</div>' +
+                  '</div>' +
+                '</div>' +
+
+                // 教育背景
+                '<div class="bg-white rounded-lg shadow p-6">' +
+                  '<div class="flex items-center justify-between mb-4">' +
+                    '<h3 class="text-lg font-semibold flex items-center">' +
+                      '<i class="fas fa-graduation-cap mr-2 text-blue-500"></i>教育背景' +
+                    '</h3>' +
+                    '<button onclick="addEducation()" class="text-sm text-blue-500 hover:text-blue-600 flex items-center">' +
+                      '<i class="fas fa-plus mr-1"></i>添加' +
+                    '</button>' +
+                  '</div>' +
+                  '<div id="education-list" class="space-y-4">' +
+                    (resume.education?.map((edu, idx) => renderEducationItem(edu, idx)).join('') || 
+                     '<p class="text-gray-400 text-sm text-center py-4">暂无教育背景，点击上方"添加"按钮</p>') +
+                  '</div>' +
+                '</div>' +
+
+                // 工作经历
+                '<div class="bg-white rounded-lg shadow p-6">' +
+                  '<div class="flex items-center justify-between mb-4">' +
+                    '<h3 class="text-lg font-semibold flex items-center">' +
+                      '<i class="fas fa-briefcase mr-2 text-green-500"></i>工作经历' +
+                    '</h3>' +
+                    '<button onclick="addWorkExperience()" class="text-sm text-blue-500 hover:text-blue-600 flex items-center">' +
+                      '<i class="fas fa-plus mr-1"></i>添加' +
+                    '</button>' +
+                  '</div>' +
+                  '<div id="work-list" class="space-y-4">' +
+                    (resume.work_experience?.map((exp, idx) => renderWorkItem(exp, idx)).join('') || 
+                     '<p class="text-gray-400 text-sm text-center py-4">暂无工作经历，点击上方"添加"按钮</p>') +
+                  '</div>' +
+                '</div>' +
+
+                // 项目经历
+                '<div class="bg-white rounded-lg shadow p-6">' +
+                  '<div class="flex items-center justify-between mb-4">' +
+                    '<h3 class="text-lg font-semibold flex items-center">' +
+                      '<i class="fas fa-project-diagram mr-2 text-purple-500"></i>项目经历' +
+                    '</h3>' +
+                    '<button onclick="addProject()" class="text-sm text-blue-500 hover:text-blue-600 flex items-center">' +
+                      '<i class="fas fa-plus mr-1"></i>添加' +
+                    '</button>' +
+                  '</div>' +
+                  '<div id="project-list" class="space-y-4">' +
+                    (resume.projects?.map((proj, idx) => renderProjectItem(proj, idx)).join('') || 
+                     '<p class="text-gray-400 text-sm text-center py-4">暂无项目经历，点击上方"添加"按钮</p>') +
+                  '</div>' +
+                '</div>' +
+
+                // 专业技能
+                '<div class="bg-white rounded-lg shadow p-6">' +
+                  '<h3 class="text-lg font-semibold mb-4 flex items-center">' +
+                    '<i class="fas fa-cogs mr-2 text-yellow-500"></i>专业技能' +
+                  '</h3>' +
+                  '<div class="flex flex-wrap gap-2 mb-3" id="skills-display">' +
+                    (resume.skills?.map((skill, idx) => 
+                      '<span class="px-3 py-1 bg-gray-100 rounded-full text-sm flex items-center gap-2">' +
+                        skill +
+                        '<button onclick="removeSkill(' + idx + ')" class="text-red-500 hover:text-red-600">' +
+                          '<i class="fas fa-times text-xs"></i>' +
+                        '</button>' +
+                      '</span>'
+                    ).join('') || '') +
+                  '</div>' +
+                  '<div class="flex gap-2">' +
+                    '<input type="text" id="new-skill" placeholder="添加技能..." ' +
+                           'class="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500" />' +
+                    '<button onclick="addSkill()" class="px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600">' +
+                      '添加' +
+                    '</button>' +
+                  '</div>' +
+                '</div>';
+              
+              bindInputEvents();
+            }
+
+            // 渲染教育经历项
+            function renderEducationItem(edu, index) {
+              return '<div class="border rounded-lg p-4 relative">' +
+                '<button onclick="removeEducation(' + index + ')" ' +
+                        'class="absolute top-2 right-2 text-red-500 hover:text-red-600">' +
+                  '<i class="fas fa-trash text-sm"></i>' +
+                '</button>' +
+                '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
+                  '<input type="text" placeholder="学校" value="' + (edu.school || '') + '" ' +
+                         'onchange="updateEducation(' + index + ', \\'school\\', this.value)" ' +
+                         'class="px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" />' +
+                  '<input type="text" placeholder="专业" value="' + (edu.major || '') + '" ' +
+                         'onchange="updateEducation(' + index + ', \\'major\\', this.value)" ' +
+                         'class="px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" />' +
+                  '<input type="text" placeholder="学历" value="' + (edu.degree || '') + '" ' +
+                         'onchange="updateEducation(' + index + ', \\'degree\\', this.value)" ' +
+                         'class="px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" />' +
+                  '<input type="text" placeholder="时间段(如:2017-2021)" value="' + (edu.duration || '') + '" ' +
+                         'onchange="updateEducation(' + index + ', \\'duration\\', this.value)" ' +
+                         'class="px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" />' +
+                '</div>' +
+              '</div>';
+            }
+
+            // 渲染工作经历项
+            function renderWorkItem(exp, index) {
+              return '<div class="border rounded-lg p-4 relative">' +
+                '<button onclick="removeWorkExperience(' + index + ')" ' +
+                        'class="absolute top-2 right-2 text-red-500 hover:text-red-600">' +
+                  '<i class="fas fa-trash text-sm"></i>' +
+                '</button>' +
+                '<div class="space-y-3">' +
+                  '<input type="text" placeholder="公司" value="' + (exp.company || '') + '" ' +
+                         'onchange="updateWorkExperience(' + index + ', \\'company\\', this.value)" ' +
+                         'class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" />' +
+                  '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
+                    '<input type="text" placeholder="职位" value="' + (exp.position || '') + '" ' +
+                           'onchange="updateWorkExperience(' + index + ', \\'position\\', this.value)" ' +
+                           'class="px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" />' +
+                    '<input type="text" placeholder="时间段(如:2024.01-至今)" value="' + (exp.duration || '') + '" ' +
+                           'onchange="updateWorkExperience(' + index + ', \\'duration\\', this.value)" ' +
+                           'class="px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" />' +
+                  '</div>' +
+                  '<textarea placeholder="工作描述" ' +
+                            'onchange="updateWorkExperience(' + index + ', \\'description\\', this.value)" ' +
+                            'class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" ' +
+                            'rows="3">' + (exp.description || '') + '</textarea>' +
+                '</div>' +
+              '</div>';
+            }
+
+            // 渲染项目经历项
+            function renderProjectItem(proj, index) {
+              return '<div class="border rounded-lg p-4 relative">' +
+                '<button onclick="removeProject(' + index + ')" ' +
+                        'class="absolute top-2 right-2 text-red-500 hover:text-red-600">' +
+                  '<i class="fas fa-trash text-sm"></i>' +
+                '</button>' +
+                '<div class="space-y-3">' +
+                  '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3">' +
+                    '<input type="text" placeholder="项目名称" value="' + (proj.name || '') + '" ' +
+                           'onchange="updateProject(' + index + ', \\'name\\', this.value)" ' +
+                           'class="px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" />' +
+                    '<input type="text" placeholder="角色" value="' + (proj.role || '') + '" ' +
+                           'onchange="updateProject(' + index + ', \\'role\\', this.value)" ' +
+                           'class="px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" />' +
+                  '</div>' +
+                  '<input type="text" placeholder="时间段" value="' + (proj.duration || '') + '" ' +
+                         'onchange="updateProject(' + index + ', \\'duration\\', this.value)" ' +
+                         'class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" />' +
+                  '<textarea placeholder="项目描述" ' +
+                            'onchange="updateProject(' + index + ', \\'description\\', this.value)" ' +
+                            'class="w-full px-3 py-2 border rounded focus:ring-2 focus:ring-blue-500" ' +
+                            'rows="3">' + (proj.description || '') + '</textarea>' +
+                '</div>' +
+              '</div>';
+            }
+
+            // 绑定输入事件
+            function bindInputEvents() {
+              document.getElementById('input-name')?.addEventListener('input', e => {
+                resume.basic_info.name = e.target.value;
+                resume.name = e.target.value || '未命名简历';
+                markDirty();
+                debouncePreview();
+              });
+
+              document.getElementById('input-contact')?.addEventListener('input', e => {
+                resume.basic_info.contact = e.target.value;
+                markDirty();
+                debouncePreview();
+              });
+
+              document.getElementById('input-target')?.addEventListener('input', e => {
+                resume.basic_info.target_position = e.target.value;
+                markDirty();
+                debouncePreview();
+              });
+
+              document.getElementById('new-skill')?.addEventListener('keypress', e => {
+                if (e.key === 'Enter') {
+                  addSkill();
+                }
+              });
+            }
+
+            // 教育背景操作
+            window.addEducation = function() {
+              if (!resume.education) resume.education = [];
+              resume.education.push({
+                school: '',
+                major: '',
+                degree: '',
+                duration: ''
+              });
+              markDirty();
+              renderEditor(resume);
+            };
+
+            window.removeEducation = function(index) {
+              if (confirm('确定删除这条教育背景？')) {
+                resume.education.splice(index, 1);
+                markDirty();
+                renderEditor(resume);
+                renderPreview(resume);
+              }
+            };
+
+            window.updateEducation = function(index, field, value) {
+              resume.education[index][field] = value;
+              markDirty();
+              debouncePreview();
+            };
+
+            // 工作经历操作
+            window.addWorkExperience = function() {
+              if (!resume.work_experience) resume.work_experience = [];
+              resume.work_experience.push({
+                company: '',
+                position: '',
+                duration: '',
+                description: ''
+              });
+              markDirty();
+              renderEditor(resume);
+            };
+
+            window.removeWorkExperience = function(index) {
+              if (confirm('确定删除这条工作经历？')) {
+                resume.work_experience.splice(index, 1);
+                markDirty();
+                renderEditor(resume);
+                renderPreview(resume);
+              }
+            };
+
+            window.updateWorkExperience = function(index, field, value) {
+              resume.work_experience[index][field] = value;
+              markDirty();
+              debouncePreview();
+            };
+
+            // 项目经历操作
+            window.addProject = function() {
+              if (!resume.projects) resume.projects = [];
+              resume.projects.push({
+                name: '',
+                role: '',
+                duration: '',
+                description: '',
+                achievements: [],
+                tech_stack: []
+              });
+              markDirty();
+              renderEditor(resume);
+            };
+
+            window.removeProject = function(index) {
+              if (confirm('确定删除这个项目？')) {
+                resume.projects.splice(index, 1);
+                markDirty();
+                renderEditor(resume);
+                renderPreview(resume);
+              }
+            };
+
+            window.updateProject = function(index, field, value) {
+              resume.projects[index][field] = value;
+              markDirty();
+              debouncePreview();
+            };
+
+            // 技能操作
+            window.addSkill = function() {
+              const input = document.getElementById('new-skill');
+              const skill = input.value.trim();
+              if (skill) {
+                if (!resume.skills) resume.skills = [];
+                resume.skills.push(skill);
+                input.value = '';
+                markDirty();
+                renderEditor(resume);
+                renderPreview(resume);
+              }
+            };
+
+            window.removeSkill = function(index) {
+              resume.skills.splice(index, 1);
+              markDirty();
+              renderEditor(resume);
+              renderPreview(resume);
+            };
+
+            // 防抖预览更新
+            let previewTimer;
+            function debouncePreview() {
+              clearTimeout(previewTimer);
+              previewTimer = setTimeout(() => {
+                renderPreview(resume);
+              }, 300);
+            }
+
+            // 渲染预览
+            function renderPreview(resume) {
+              const container = document.getElementById('preview-container');
+              const template = document.getElementById('template-selector').value;
+              container.innerHTML = renderTemplate(resume, template);
+            }
+
+            // 模板渲染
+            function renderTemplate(resume, template) {
+              switch(template) {
+                case 'modern':
+                  return renderModernTemplate(resume);
+                case 'timeline':
+                  return renderTimelineTemplate(resume);
+                default:
+                  return renderClassicTemplate(resume);
+              }
+            }
+
+            // 经典模板
+            function renderClassicTemplate(resume) {
+              return '<div class="space-y-4 text-sm">' +
+                '<div class="text-center border-b pb-4">' +
+                  '<h1 class="text-2xl font-bold text-gray-900">' + (resume.basic_info?.name || '未命名') + '</h1>' +
+                  '<p class="text-gray-600 mt-1">' + (resume.basic_info?.contact || '') + '</p>' +
+                  '<p class="text-gray-600">' + (resume.basic_info?.target_position || '') + '</p>' +
+                '</div>' +
+
+                '<div class="border-t pt-3">' +
+                  '<h3 class="font-bold text-base mb-2 text-gray-800"><i class="fas fa-graduation-cap mr-1 text-blue-500"></i>教育背景</h3>' +
+                  (resume.education?.length > 0 ? resume.education.map(edu =>
+                    '<div class="mb-2">' +
+                      '<div class="flex justify-between">' +
+                        '<span class="font-medium">' + edu.school + '</span>' +
+                        '<span class="text-gray-500">' + edu.duration + '</span>' +
+                      '</div>' +
+                      '<div class="text-gray-600">' + edu.major + ' · ' + edu.degree + '</div>' +
+                    '</div>'
+                  ).join('') : '<p class="text-gray-400">暂无教育背景</p>') +
+                '</div>' +
+
+                '<div class="border-t pt-3">' +
+                  '<h3 class="font-bold text-base mb-2 text-gray-800"><i class="fas fa-briefcase mr-1 text-green-500"></i>工作经历</h3>' +
+                  (resume.work_experience?.length > 0 ? resume.work_experience.map(exp =>
+                    '<div class="mb-3">' +
+                      '<div class="flex justify-between">' +
+                        '<span class="font-medium">' + exp.position + '</span>' +
+                        '<span class="text-gray-500">' + exp.duration + '</span>' +
+                      '</div>' +
+                      '<div class="text-gray-600">' + exp.company + '</div>' +
+                      '<p class="text-gray-700 mt-1 text-xs leading-relaxed">' + (exp.description || '') + '</p>' +
+                    '</div>'
+                  ).join('') : '<p class="text-gray-400">暂无工作经历</p>') +
+                '</div>' +
+
+                '<div class="border-t pt-3">' +
+                  '<h3 class="font-bold text-base mb-2 text-gray-800"><i class="fas fa-project-diagram mr-1 text-purple-500"></i>项目经历</h3>' +
+                  (resume.projects?.length > 0 ? resume.projects.map(proj =>
+                    '<div class="mb-3">' +
+                      '<div class="flex justify-between">' +
+                        '<span class="font-medium">' + proj.name + '</span>' +
+                        '<span class="text-gray-500">' + proj.duration + '</span>' +
+                      '</div>' +
+                      '<div class="text-gray-600">' + proj.role + '</div>' +
+                      '<p class="text-gray-700 mt-1 text-xs leading-relaxed">' + (proj.description || '') + '</p>' +
+                    '</div>'
+                  ).join('') : '<p class="text-gray-400">暂无项目经历</p>') +
+                '</div>' +
+
+                '<div class="border-t pt-3">' +
+                  '<h3 class="font-bold text-base mb-2 text-gray-800"><i class="fas fa-cogs mr-1 text-yellow-500"></i>专业技能</h3>' +
+                  '<div class="flex flex-wrap gap-1">' +
+                    (resume.skills?.length > 0 ? resume.skills.map(skill =>
+                      '<span class="px-2 py-1 bg-gray-100 rounded text-xs">' + skill + '</span>'
+                    ).join('') : '<p class="text-gray-400">暂无技能</p>') +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+            }
+
+            // 现代模板
+            function renderModernTemplate(resume) {
+              return '<div class="space-y-4 text-sm">' +
+                '<div class="bg-gradient-to-r from-blue-500 to-purple-500 text-white p-4 rounded-lg">' +
+                  '<h1 class="text-2xl font-bold">' + (resume.basic_info?.name || '未命名') + '</h1>' +
+                  '<p class="mt-1 opacity-90">' + (resume.basic_info?.contact || '') + '</p>' +
+                  '<p class="opacity-90">' + (resume.basic_info?.target_position || '') + '</p>' +
+                '</div>' +
+
+                '<div class="bg-blue-50 p-4 rounded-lg">' +
+                  '<h3 class="font-bold text-base mb-2 text-blue-900">教育背景</h3>' +
+                  (resume.education?.length > 0 ? resume.education.map(edu =>
+                    '<div class="mb-2">' +
+                      '<div class="flex justify-between">' +
+                        '<span class="font-medium text-gray-800">' + edu.school + '</span>' +
+                        '<span class="text-gray-600 text-xs">' + edu.duration + '</span>' +
+                      '</div>' +
+                      '<div class="text-gray-600 text-xs">' + edu.major + ' · ' + edu.degree + '</div>' +
+                    '</div>'
+                  ).join('') : '<p class="text-gray-400">暂无教育背景</p>') +
+                '</div>' +
+
+                '<div class="bg-green-50 p-4 rounded-lg">' +
+                  '<h3 class="font-bold text-base mb-2 text-green-900">工作经历</h3>' +
+                  (resume.work_experience?.length > 0 ? resume.work_experience.map(exp =>
+                    '<div class="mb-3">' +
+                      '<div class="flex justify-between">' +
+                        '<span class="font-medium text-gray-800">' + exp.position + '</span>' +
+                        '<span class="text-gray-600 text-xs">' + exp.duration + '</span>' +
+                      '</div>' +
+                      '<div class="text-gray-600 text-xs">' + exp.company + '</div>' +
+                      '<p class="text-gray-700 mt-1 text-xs leading-relaxed">' + (exp.description || '') + '</p>' +
+                    '</div>'
+                  ).join('') : '<p class="text-gray-400">暂无工作经历</p>') +
+                '</div>' +
+
+                '<div class="bg-purple-50 p-4 rounded-lg">' +
+                  '<h3 class="font-bold text-base mb-2 text-purple-900">项目经历</h3>' +
+                  (resume.projects?.length > 0 ? resume.projects.map(proj =>
+                    '<div class="mb-3">' +
+                      '<div class="flex justify-between">' +
+                        '<span class="font-medium text-gray-800">' + proj.name + '</span>' +
+                        '<span class="text-gray-600 text-xs">' + proj.duration + '</span>' +
+                      '</div>' +
+                      '<div class="text-gray-600 text-xs">' + proj.role + '</div>' +
+                      '<p class="text-gray-700 mt-1 text-xs leading-relaxed">' + (proj.description || '') + '</p>' +
+                    '</div>'
+                  ).join('') : '<p class="text-gray-400">暂无项目经历</p>') +
+                '</div>' +
+
+                '<div class="bg-yellow-50 p-4 rounded-lg">' +
+                  '<h3 class="font-bold text-base mb-2 text-yellow-900">专业技能</h3>' +
+                  '<div class="flex flex-wrap gap-1">' +
+                    (resume.skills?.length > 0 ? resume.skills.map(skill =>
+                      '<span class="px-2 py-1 bg-yellow-200 text-yellow-900 rounded text-xs">' + skill + '</span>'
+                    ).join('') : '<p class="text-gray-400">暂无技能</p>') +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+            }
+
+            // 时间线模板（简化版）
+            function renderTimelineTemplate(resume) {
+              return '<div class="space-y-4 text-sm">' +
+                '<div class="text-center border-b-2 border-blue-500 pb-4">' +
+                  '<h1 class="text-2xl font-bold text-gray-900">' + (resume.basic_info?.name || '未命名') + '</h1>' +
+                  '<p class="text-gray-600 mt-1">' + (resume.basic_info?.contact || '') + '</p>' +
+                  '<p class="text-blue-600 font-medium">' + (resume.basic_info?.target_position || '') + '</p>' +
+                '</div>' +
+
+                '<div>' +
+                  '<h3 class="font-bold text-base mb-3 text-gray-800 flex items-center">' +
+                    '<span class="w-2 h-2 bg-blue-500 rounded-full mr-2"></span>教育背景' +
+                  '</h3>' +
+                  (resume.education?.length > 0 ? resume.education.map(edu =>
+                    '<div class="ml-4 border-l-2 border-gray-300 pl-4 pb-3">' +
+                      '<div class="flex justify-between">' +
+                        '<span class="font-medium">' + edu.school + '</span>' +
+                        '<span class="text-xs text-gray-500">' + edu.duration + '</span>' +
+                      '</div>' +
+                      '<div class="text-gray-600 text-xs">' + edu.major + ' · ' + edu.degree + '</div>' +
+                    '</div>'
+                  ).join('') : '<p class="text-gray-400 ml-4">暂无教育背景</p>') +
+                '</div>' +
+
+                '<div>' +
+                  '<h3 class="font-bold text-base mb-3 text-gray-800 flex items-center">' +
+                    '<span class="w-2 h-2 bg-green-500 rounded-full mr-2"></span>工作经历' +
+                  '</h3>' +
+                  (resume.work_experience?.length > 0 ? resume.work_experience.map(exp =>
+                    '<div class="ml-4 border-l-2 border-gray-300 pl-4 pb-3">' +
+                      '<div class="flex justify-between">' +
+                        '<span class="font-medium">' + exp.position + '</span>' +
+                        '<span class="text-xs text-gray-500">' + exp.duration + '</span>' +
+                      '</div>' +
+                      '<div class="text-gray-600 text-xs">' + exp.company + '</div>' +
+                      '<p class="text-gray-700 mt-1 text-xs leading-relaxed">' + (exp.description || '') + '</p>' +
+                    '</div>'
+                  ).join('') : '<p class="text-gray-400 ml-4">暂无工作经历</p>') +
+                '</div>' +
+
+                '<div>' +
+                  '<h3 class="font-bold text-base mb-3 text-gray-800 flex items-center">' +
+                    '<span class="w-2 h-2 bg-purple-500 rounded-full mr-2"></span>项目经历' +
+                  '</h3>' +
+                  (resume.projects?.length > 0 ? resume.projects.map(proj =>
+                    '<div class="ml-4 border-l-2 border-gray-300 pl-4 pb-3">' +
+                      '<div class="flex justify-between">' +
+                        '<span class="font-medium">' + proj.name + '</span>' +
+                        '<span class="text-xs text-gray-500">' + proj.duration + '</span>' +
+                      '</div>' +
+                      '<div class="text-gray-600 text-xs">' + proj.role + '</div>' +
+                      '<p class="text-gray-700 mt-1 text-xs leading-relaxed">' + (proj.description || '') + '</p>' +
+                    '</div>'
+                  ).join('') : '<p class="text-gray-400 ml-4">暂无项目经历</p>') +
+                '</div>' +
+
+                '<div>' +
+                  '<h3 class="font-bold text-base mb-3 text-gray-800 flex items-center">' +
+                    '<span class="w-2 h-2 bg-yellow-500 rounded-full mr-2"></span>专业技能' +
+                  '</h3>' +
+                  '<div class="ml-4 flex flex-wrap gap-1">' +
+                    (resume.skills?.length > 0 ? resume.skills.map(skill =>
+                      '<span class="px-2 py-1 bg-gray-100 border border-gray-300 rounded text-xs">' + skill + '</span>'
+                    ).join('') : '<p class="text-gray-400">暂无技能</p>') +
+                  '</div>' +
+                '</div>' +
+              '</div>';
+            }
+
+            // 标记数据已修改
+            function markDirty() {
+              isDirty = true;
+              const status = document.getElementById('save-status');
+              status.textContent = '未保存';
+              status.className = 'text-sm text-orange-500';
+            }
+
+            // 保存简历
+            document.getElementById('save-btn')?.addEventListener('click', function() {
+              try {
+                const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+                const index = resumes.findIndex(r => r.id === resumeId);
+                
+                if (index === -1) {
+                  throw new Error('简历不存在');
+                }
+
+                resume.updated_at = new Date().toISOString();
+                resumes[index] = resume;
+                localStorage.setItem('jobcopilot_resumes', JSON.stringify(resumes));
+
+                isDirty = false;
+                const status = document.getElementById('save-status');
+                status.textContent = '已保存';
+                status.className = 'text-sm text-green-500';
+
+                setTimeout(() => {
+                  status.className = 'text-sm text-gray-500';
+                }, 2000);
+              } catch (error) {
+                alert('保存失败：' + error.message);
+              }
+            });
+
+            // 导出 PDF
+            document.getElementById('export-pdf-btn')?.addEventListener('click', async function() {
+              const btn = this;
+              const originalText = btn.innerHTML;
+              btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i>生成中...';
+              btn.disabled = true;
+
+              try {
+                const previewElement = document.getElementById('preview-container');
+                const options = {
+                  margin: [10, 10, 10, 10],
+                  filename: (resume.basic_info?.name || '简历') + '.pdf',
+                  image: { type: 'jpeg', quality: 0.98 },
+                  html2canvas: { 
+                    scale: 2,
+                    useCORS: true,
+                    letterRendering: true,
+                    logging: false
+                  },
+                  jsPDF: { 
+                    unit: 'mm', 
+                    format: 'a4', 
+                    orientation: 'portrait',
+                    compress: true
+                  },
+                  pagebreak: { 
+                    mode: ['avoid-all', 'css', 'legacy']
+                  }
+                };
+
+                await html2pdf().from(previewElement).set(options).save();
+                alert('PDF 导出成功！');
+              } catch (error) {
+                alert('PDF 导出失败：' + error.message);
+              } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+              }
+            });
+
+            // 模板切换
+            document.getElementById('template-selector')?.addEventListener('change', function() {
+              renderPreview(resume);
+            });
+
+            // 监听页面关闭
+            window.addEventListener('beforeunload', function(e) {
+              if (isDirty) {
+                e.preventDefault();
+                e.returnValue = '您有未保存的更改，确定要离开吗？';
+                return e.returnValue;
+              }
+            });
+
+            // 初始化
+            loadResume();
+          })();
+        `
+      }} />
+    </div>,
+    { title: '编辑简历 - Job Copilot' }
   )
 })
 
