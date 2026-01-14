@@ -9,6 +9,12 @@ import { executeResumePreprocess, type ResumePreprocessInput } from '../agents/r
 import { executeResumeParse, type ResumeParseOutput } from '../agents/resume-parse';
 import { executeMatchEvaluate } from '../agents/match-evaluate';
 import { executeResumeVersion } from '../agents/resume-version';
+import { 
+  getUploadUrlAndParse, 
+  waitForBatchCompletion, 
+  parseDocumentByUrl,
+  type MinerUTaskState 
+} from '../core/mineru-client';
 import type { Resume, ResumeVersion, Match, DAGState } from '../types';
 
 const resumeRoutes = new Hono();
@@ -86,8 +92,214 @@ async function runResumeParseDAG(
   };
 }
 
+// ==================== MinerU 文档解析 API ====================
+
 /**
- * POST /api/resume/parse - 解析简历
+ * POST /api/resume/mineru/upload-url - 获取 MinerU 上传 URL
+ * 
+ * 前端直传流程第一步：获取上传 URL
+ */
+resumeRoutes.post('/mineru/upload-url', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { fileName, isOcr } = body;
+
+    if (!fileName) {
+      return c.json({ success: false, error: '缺少 fileName 参数' }, 400);
+    }
+
+    console.log(`[MinerU] 申请上传 URL，文件名: ${fileName}`);
+
+    const result = await getUploadUrlAndParse(fileName, {
+      isOcr: isOcr ?? false,
+      enableTable: true,
+      modelVersion: 'vlm',
+    });
+
+    if (!result.success) {
+      return c.json({ success: false, error: result.error }, 500);
+    }
+
+    console.log(`[MinerU] 上传 URL 获取成功，batch_id: ${result.batchId}`);
+
+    return c.json({
+      success: true,
+      uploadUrl: result.uploadUrl,
+      batchId: result.batchId,
+    });
+  } catch (error) {
+    console.error('[MinerU] 获取上传 URL 失败:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+    }, 500);
+  }
+});
+
+/**
+ * POST /api/resume/mineru/parse - 等待 MinerU 解析完成并处理结果
+ * 
+ * 前端直传流程第二步：轮询等待解析完成，然后进行简历结构化
+ */
+resumeRoutes.post('/mineru/parse', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { batchId, fileName } = body;
+
+    if (!batchId || !fileName) {
+      return c.json({ success: false, error: '缺少 batchId 或 fileName 参数' }, 400);
+    }
+
+    console.log(`[MinerU] 开始轮询解析结果，batch_id: ${batchId}, 文件: ${fileName}`);
+
+    // 等待 MinerU 解析完成
+    const mineruResult = await waitForBatchCompletion(batchId, fileName, (progress) => {
+      console.log(`[MinerU] 解析进度: ${progress.state}, ${progress.extractedPages || 0}/${progress.totalPages || '?'}`);
+    });
+
+    if (!mineruResult.success) {
+      return c.json({ success: false, error: mineruResult.error }, 500);
+    }
+
+    console.log(`[MinerU] 文档解析完成，开始结构化处理...`);
+
+    // 使用解析后的 Markdown 进行简历结构化
+    const cleanedText = mineruResult.markdown || '';
+    
+    if (cleanedText.length < 50) {
+      return c.json({ success: false, error: '文档内容过短或解析失败' }, 400);
+    }
+
+    // 调用简历解析 Agent 进行结构化
+    const parseResult = await executeResumeParse({ cleanedText });
+
+    if (!parseResult.success) {
+      return c.json({ success: false, error: parseResult.error }, 500);
+    }
+
+    const resumeId = generateId();
+    
+    // 创建简历记录
+    const resume: Resume = {
+      id: resumeId,
+      name: parseResult.data!.basic_info?.name || '未命名简历',
+      basic_info: parseResult.data!.basic_info,
+      education: parseResult.data!.education,
+      work_experience: parseResult.data!.work_experience,
+      projects: parseResult.data!.projects,
+      skills: parseResult.data!.skills,
+      ability_tags: parseResult.data!.ability_tags,
+      raw_content: cleanedText,
+      version: 1,
+      version_tag: '基础版',
+      linked_jd_ids: [],
+      is_master: true,
+      status: 'completed',
+      created_at: now(),
+      updated_at: now(),
+    };
+
+    console.log(`[MinerU] 简历结构化完成，ID: ${resumeId}, 姓名: ${resume.basic_info?.name}`);
+
+    return c.json({
+      success: true,
+      resumeId,
+      resume,
+      zipUrl: mineruResult.zipUrl,
+    });
+  } catch (error) {
+    console.error('[MinerU] 解析处理失败:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+    }, 500);
+  }
+});
+
+/**
+ * POST /api/resume/mineru/parse-by-url - 通过 URL 解析文档
+ * 
+ * 适用于文件已有在线 URL 的场景
+ */
+resumeRoutes.post('/mineru/parse-by-url', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { fileUrl, isOcr } = body;
+
+    if (!fileUrl) {
+      return c.json({ success: false, error: '缺少 fileUrl 参数' }, 400);
+    }
+
+    console.log(`[MinerU] 通过 URL 解析文档: ${fileUrl}`);
+
+    // 调用 MinerU 解析
+    const mineruResult = await parseDocumentByUrl(fileUrl, {
+      isOcr: isOcr ?? false,
+      enableTable: true,
+      modelVersion: 'vlm',
+    }, (progress) => {
+      console.log(`[MinerU] 解析进度: ${progress.state}`);
+    });
+
+    if (!mineruResult.success) {
+      return c.json({ success: false, error: mineruResult.error }, 500);
+    }
+
+    const cleanedText = mineruResult.markdown || '';
+    
+    if (cleanedText.length < 50) {
+      return c.json({ success: false, error: '文档内容过短或解析失败' }, 400);
+    }
+
+    // 调用简历解析 Agent 进行结构化
+    const parseResult = await executeResumeParse({ cleanedText });
+
+    if (!parseResult.success) {
+      return c.json({ success: false, error: parseResult.error }, 500);
+    }
+
+    const resumeId = generateId();
+    
+    const resume: Resume = {
+      id: resumeId,
+      name: parseResult.data!.basic_info?.name || '未命名简历',
+      basic_info: parseResult.data!.basic_info,
+      education: parseResult.data!.education,
+      work_experience: parseResult.data!.work_experience,
+      projects: parseResult.data!.projects,
+      skills: parseResult.data!.skills,
+      ability_tags: parseResult.data!.ability_tags,
+      raw_content: cleanedText,
+      version: 1,
+      version_tag: '基础版',
+      linked_jd_ids: [],
+      is_master: true,
+      status: 'completed',
+      created_at: now(),
+      updated_at: now(),
+    };
+
+    console.log(`[MinerU] 简历解析完成，ID: ${resumeId}`);
+
+    return c.json({
+      success: true,
+      resumeId,
+      resume,
+      zipUrl: mineruResult.zipUrl,
+    });
+  } catch (error) {
+    console.error('[MinerU] URL 解析失败:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+    }, 500);
+  }
+});
+
+// ==================== 原有简历解析 API ====================
+
+/**
+ * POST /api/resume/parse - 解析简历（原有逻辑，保留文本模式）
  */
 resumeRoutes.post('/parse', async (c) => {
   try {

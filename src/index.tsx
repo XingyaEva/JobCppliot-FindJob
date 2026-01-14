@@ -2330,30 +2330,22 @@ app.get('/resume', (c) => {
               uploadPlaceholder.classList.add('hidden');
               filePreview.classList.remove('hidden');
               textInput.value = '';
-              
-              // 读取文件为Base64
-              const reader = new FileReader();
-              reader.onload = function(e) {
-                fileDataUrl = e.target.result.split(',')[1]; // 去掉data:xxx;base64,前缀
-              };
-              reader.readAsDataURL(file);
             }
 
             // 移除文件
             removeFileBtn.addEventListener('click', function(e) {
               e.stopPropagation();
               selectedFile = null;
-              fileDataUrl = null;
               fileInput.value = '';
               uploadPlaceholder.classList.remove('hidden');
               filePreview.classList.add('hidden');
             });
 
-            // 解析按钮点击
+            // 解析按钮点击 - MinerU 直传流程
             parseBtn.addEventListener('click', async function() {
               const text = textInput.value.trim();
               
-              if (!text && !fileDataUrl) {
+              if (!text && !selectedFile) {
                 alert('请上传简历文件或粘贴简历文本');
                 return;
               }
@@ -2363,36 +2355,106 @@ app.get('/resume', (c) => {
               progressArea.classList.remove('hidden');
               errorArea.classList.add('hidden');
 
-              renderDAGNodes([
-                { id: 'preprocess', name: '简历预处理', status: 'pending' },
-                { id: 'parse', name: '简历解析', status: 'pending' },
-              ]);
-
               try {
-                const response = await fetch('/api/resume/parse', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    type: fileDataUrl ? 'file' : 'text',
-                    content: text || undefined,
-                    fileData: fileDataUrl || undefined,
-                    fileName: selectedFile?.name,
-                  }),
-                });
+                let result;
+                
+                if (selectedFile) {
+                  // 文件模式：使用 MinerU 直传
+                  renderDAGNodes([
+                    { id: 'upload', name: '获取上传地址', status: 'running' },
+                    { id: 'transfer', name: '上传文件到 MinerU', status: 'pending' },
+                    { id: 'ocr', name: 'MinerU 文档解析', status: 'pending' },
+                    { id: 'parse', name: '简历结构化', status: 'pending' },
+                  ]);
 
-                const result = await response.json();
-
-                if (result.success) {
-                  if (result.dagState) {
-                    renderDAGNodes(result.dagState.nodes);
+                  // 步骤1: 获取上传 URL
+                  const uploadUrlRes = await fetch('/api/resume/mineru/upload-url', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                      fileName: selectedFile.name,
+                      isOcr: false  // 非扫描件默认关闭 OCR
+                    }),
+                  });
+                  const uploadUrlData = await uploadUrlRes.json();
+                  
+                  if (!uploadUrlData.success) {
+                    throw new Error(uploadUrlData.error || '获取上传地址失败');
                   }
                   
+                  renderDAGNodes([
+                    { id: 'upload', name: '获取上传地址', status: 'completed' },
+                    { id: 'transfer', name: '上传文件到 MinerU', status: 'running' },
+                    { id: 'ocr', name: 'MinerU 文档解析', status: 'pending' },
+                    { id: 'parse', name: '简历结构化', status: 'pending' },
+                  ]);
+
+                  // 步骤2: 直传文件到 MinerU
+                  const uploadRes = await fetch(uploadUrlData.uploadUrl, {
+                    method: 'PUT',
+                    body: selectedFile,  // 直接上传文件
+                  });
+                  
+                  if (!uploadRes.ok) {
+                    throw new Error('文件上传失败: ' + uploadRes.status);
+                  }
+                  
+                  renderDAGNodes([
+                    { id: 'upload', name: '获取上传地址', status: 'completed' },
+                    { id: 'transfer', name: '上传文件到 MinerU', status: 'completed' },
+                    { id: 'ocr', name: 'MinerU 文档解析', status: 'running' },
+                    { id: 'parse', name: '简历结构化', status: 'pending' },
+                  ]);
+
+                  // 步骤3: 等待 MinerU 解析完成并获取结构化结果
+                  const parseRes = await fetch('/api/resume/mineru/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      batchId: uploadUrlData.batchId,
+                      fileName: selectedFile.name,
+                    }),
+                  });
+                  result = await parseRes.json();
+                  
+                  if (result.success) {
+                    renderDAGNodes([
+                      { id: 'upload', name: '获取上传地址', status: 'completed' },
+                      { id: 'transfer', name: '上传文件到 MinerU', status: 'completed' },
+                      { id: 'ocr', name: 'MinerU 文档解析', status: 'completed' },
+                      { id: 'parse', name: '简历结构化', status: 'completed' },
+                    ]);
+                  }
+                  
+                } else {
+                  // 文本模式：使用原有 API
+                  renderDAGNodes([
+                    { id: 'preprocess', name: '文本预处理', status: 'running' },
+                    { id: 'parse', name: '简历解析', status: 'pending' },
+                  ]);
+
+                  const response = await fetch('/api/resume/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      type: 'text',
+                      content: text,
+                    }),
+                  });
+                  result = await response.json();
+                  
+                  if (result.success && result.dagState) {
+                    renderDAGNodes(result.dagState.nodes);
+                  }
+                }
+
+                if (result.success) {
                   // 保存评测数据
                   if (result.metrics && window.JobCopilot && window.JobCopilot.saveMetricsBatch) {
                     window.JobCopilot.saveMetricsBatch(result.metrics);
                   }
                   
-                  // 保存到localStorage
+                  // 保存到 localStorage
                   const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
                   resumes.unshift(result.resume);
                   localStorage.setItem('jobcopilot_resumes', JSON.stringify(resumes));
@@ -2406,7 +2468,6 @@ app.get('/resume', (c) => {
                     // 清空输入
                     textInput.value = '';
                     selectedFile = null;
-                    fileDataUrl = null;
                     fileInput.value = '';
                     uploadPlaceholder.classList.remove('hidden');
                     filePreview.classList.add('hidden');
