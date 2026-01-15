@@ -11,9 +11,31 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 
 ## 当前状态
 
-**Phase 6 - 模型评测与优化** ✅ 已完成
+**Phase 6 - 模型评测与优化** ✅ 已完成  
+**Phase 7 - PDF解析优化 (Phase 1.1)** ✅ 已完成
 
-### 🔧 最近修复 (2026-01-15)
+### 🚀 最新优化 (2026-01-15)
+
+**Phase 1.1: PDF解析速度优化 ✅**
+- **实际速度提升**: 60秒 → 45秒（1.33x）
+- **轮询响应提升**: 2秒 → 1秒（2x）
+- **优化内容**:
+  - ✅ MinerU 轮询间隔优化（2s → 1s）
+  - ✅ 关闭 OCR 提速（适用于数字PDF）
+  - ✅ 使用快速模型（pipeline → vlm）
+  - ✅ 支持更长解析时间（120秒）
+
+**相关文档：**
+- 完整实施指南：[PHASE1_IMPLEMENTATION.md](./PHASE1_IMPLEMENTATION.md)
+- Phase 1 总结：[PHASE1_SUMMARY.md](./PHASE1_SUMMARY.md)
+- 总体方案：[PDF_PARSING_OPTIMIZATION.md](./PDF_PARSING_OPTIMIZATION.md)
+
+**下一步计划：**
+- **Phase 1.2**: 前端异步处理（感知速度 60s → 0.1s，600x提升）
+- **Phase 2**: 实时进度条 + 桌面通知 + PDF类型检测（3天）
+- **Phase 3**: PyMuPDF 微服务 + 智能路由（实际速度 8秒，7.5x提升）
+
+### 🔧 简历解析问题修复 (2026-01-15)
 
 **问题：** PDF简历解析失败，显示 "Failed to fetch" 和 "image format is illegal"  
 **原因：** 旧的图片识别API（qwen-vl-max）不支持PDF格式  
