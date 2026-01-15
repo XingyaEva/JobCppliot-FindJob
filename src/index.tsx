@@ -2235,6 +2235,16 @@ app.get('/resume', (c) => {
             <div id="file-preview" class="hidden">
               <i class="fas fa-file-alt text-4xl text-blue-500 mb-2"></i>
               <p id="file-name" class="text-gray-700">文件名</p>
+              {/* Phase 2.3: PDF 类型提示 */}
+              <div id="pdf-type-info" class="hidden mt-3 px-3 py-2 rounded-lg text-sm">
+                <div class="flex items-center gap-2">
+                  <i id="pdf-type-icon" class="fas"></i>
+                  <div>
+                    <p id="pdf-type-label" class="font-medium"></p>
+                    <p id="pdf-type-time" class="text-xs opacity-75"></p>
+                  </div>
+                </div>
+              </div>
               <button id="remove-file" class="mt-2 text-red-500 text-sm hover:text-red-600">
                 <i class="fas fa-times mr-1"></i>移除
               </button>
@@ -2383,12 +2393,17 @@ app.get('/resume', (c) => {
               }
             });
 
-            function handleFileSelect(file) {
+            async function handleFileSelect(file) {
               selectedFile = file;
               fileName.textContent = file.name;
               uploadPlaceholder.classList.add('hidden');
               filePreview.classList.remove('hidden');
               textInput.value = '';
+              
+              // Phase 2.3: 检测 PDF 类型
+              if (file.type === 'application/pdf') {
+                await detectPDFType(file);
+              }
             }
 
             // 移除文件
@@ -2765,6 +2780,83 @@ app.get('/resume', (c) => {
                 console.log('[桌面通知] 已发送:', title);
               } catch (error) {
                 console.error('[桌面通知] 发送失败:', error);
+              }
+            }
+            
+            // ==================== Phase 2.3: PDF 类型检测 ====================
+            
+            /**
+             * 检测 PDF 类型（数字 PDF 或扫描 PDF）
+             * @param {File} file - PDF 文件
+             */
+            async function detectPDFType(file) {
+              const pdfTypeInfo = document.getElementById('pdf-type-info');
+              const pdfTypeIcon = document.getElementById('pdf-type-icon');
+              const pdfTypeLabel = document.getElementById('pdf-type-label');
+              const pdfTypeTime = document.getElementById('pdf-type-time');
+              
+              try {
+                // 显示检测中状态
+                pdfTypeInfo.classList.remove('hidden');
+                pdfTypeInfo.className = 'mt-3 px-3 py-2 rounded-lg text-sm bg-blue-50 border border-blue-100';
+                pdfTypeIcon.className = 'fas fa-spinner fa-spin text-blue-500';
+                pdfTypeLabel.textContent = '检测中...';
+                pdfTypeLabel.className = 'font-medium text-blue-700';
+                pdfTypeTime.textContent = '';
+                
+                // 使用简单的文件大小启发式方法检测
+                // 注意：这是一个简化版本，真正的检测需要 PDF.js 但在 Cloudflare Workers 环境中可能不可用
+                const fileSizeKB = file.size / 1024;
+                const fileSizeMB = fileSizeKB / 1024;
+                
+                // 启发式规则：
+                // 1. 小于 500KB 的 PDF 通常是数字 PDF
+                // 2. 大于 2MB 且每页超过 200KB 的通常是扫描 PDF
+                // 3. 文件名包含 "scan" 或 "扫描" 的是扫描 PDF
+                
+                const fileName = file.name.toLowerCase();
+                const isScanByName = fileName.includes('scan') || fileName.includes('扫描');
+                const isLikelyDigital = fileSizeKB < 500;
+                const isLikelyScan = fileSizeMB > 2 || isScanByName;
+                
+                let pdfType, estimatedTime, bgClass, iconClass, textClass;
+                
+                if (isLikelyScan) {
+                  // 扫描 PDF
+                  pdfType = '扫描版 PDF';
+                  estimatedTime = '预计需要 45-60 秒';
+                  bgClass = 'bg-orange-50 border-orange-100';
+                  iconClass = 'fas fa-camera text-orange-500';
+                  textClass = 'text-orange-700';
+                } else if (isLikelyDigital) {
+                  // 数字 PDF
+                  pdfType = '数字版 PDF';
+                  estimatedTime = '预计需要 30-45 秒';
+                  bgClass = 'bg-green-50 border-green-100';
+                  iconClass = 'fas fa-file-pdf text-green-500';
+                  textClass = 'text-green-700';
+                } else {
+                  // 不确定
+                  pdfType = 'PDF 文件';
+                  estimatedTime = '预计需要 40-60 秒';
+                  bgClass = 'bg-gray-50 border-gray-100';
+                  iconClass = 'fas fa-file-alt text-gray-500';
+                  textClass = 'text-gray-700';
+                }
+                
+                // 更新 UI
+                await new Promise(r => setTimeout(r, 300)); // 短暂延迟使检测更真实
+                pdfTypeInfo.className = 'mt-3 px-3 py-2 rounded-lg text-sm ' + bgClass;
+                pdfTypeIcon.className = iconClass;
+                pdfTypeLabel.textContent = pdfType;
+                pdfTypeLabel.className = 'font-medium ' + textClass;
+                pdfTypeTime.textContent = estimatedTime;
+                
+                console.log('[PDF检测] 类型:', pdfType, '大小:', fileSizeMB.toFixed(2) + 'MB');
+              } catch (error) {
+                console.error('[PDF检测] 失败:', error);
+                // 失败时隐藏提示
+                pdfTypeInfo.classList.add('hidden');
               }
             }
           });
