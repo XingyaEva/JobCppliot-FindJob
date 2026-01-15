@@ -2148,20 +2148,68 @@ app.get('/resume', (c) => {
           </div>
         </div>
 
-        {/* 解析进度 - 移到上传区域上方 */}
+        {/* Phase 2.1: 实时进度条 */}
         <div id="parse-progress" class="hidden mb-8">
           <div class="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
             <div class="flex items-center gap-3 mb-4">
               <div class="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
                 <i class="fas fa-spinner loading-spinner text-white text-lg"></i>
               </div>
-              <div>
+              <div class="flex-1">
                 <h3 class="font-semibold text-gray-900">正在解析简历...</h3>
-                <p class="text-sm text-gray-500 mt-0.5">请稍候，这可能需要 30-60 秒</p>
+                <p id="progress-message" class="text-sm text-gray-500 mt-0.5">准备中...</p>
               </div>
             </div>
-            <div id="dag-nodes" class="space-y-2">
-              {/* 动态生成进度节点 */}
+            
+            {/* 进度条 */}
+            <div class="mb-4">
+              <div class="flex items-center justify-between text-sm mb-2">
+                <span id="progress-stage" class="text-gray-600 font-medium">准备中</span>
+                <span id="progress-percent" class="text-blue-600 font-semibold">0%</span>
+              </div>
+              <div class="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
+                <div id="progress-bar" class="bg-gradient-to-r from-blue-500 to-indigo-500 h-full rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+              </div>
+              <div class="flex items-center justify-between text-xs text-gray-500 mt-2">
+                <span>
+                  <i class="far fa-clock mr-1"></i>
+                  已用时: <span id="elapsed-time">0</span>秒
+                </span>
+                <span id="remaining-time-container" class="hidden">
+                  预计剩余: <span id="remaining-time">--</span>秒
+                </span>
+              </div>
+            </div>
+            
+            {/* 阶段指示器 */}
+            <div class="flex items-center justify-between text-xs">
+              <div id="stage-uploaded" class="flex flex-col items-center gap-1 opacity-30">
+                <div class="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
+                  <i class="fas fa-upload text-white text-xs"></i>
+                </div>
+                <span class="text-gray-500">上传</span>
+              </div>
+              <div class="flex-1 h-px bg-gray-300 mx-2"></div>
+              <div id="stage-parsing" class="flex flex-col items-center gap-1 opacity-30">
+                <div class="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
+                  <i class="fas fa-cog text-white text-xs"></i>
+                </div>
+                <span class="text-gray-500">解析</span>
+              </div>
+              <div class="flex-1 h-px bg-gray-300 mx-2"></div>
+              <div id="stage-structuring" class="flex flex-col items-center gap-1 opacity-30">
+                <div class="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
+                  <i class="fas fa-puzzle-piece text-white text-xs"></i>
+                </div>
+                <span class="text-gray-500">结构化</span>
+              </div>
+              <div class="flex-1 h-px bg-gray-300 mx-2"></div>
+              <div id="stage-completed" class="flex flex-col items-center gap-1 opacity-30">
+                <div class="w-6 h-6 rounded-full bg-gray-300 flex items-center justify-center">
+                  <i class="fas fa-check text-white text-xs"></i>
+                </div>
+                <span class="text-gray-500">完成</span>
+              </div>
             </div>
           </div>
         </div>
@@ -2349,7 +2397,7 @@ app.get('/resume', (c) => {
               filePreview.classList.add('hidden');
             });
 
-            // 解析按钮点击 - MinerU 直传流程
+            // Phase 2.1: 解析按钮点击 - 异步上传 + 实时进度
             parseBtn.addEventListener('click', async function() {
               const text = textInput.value.trim();
               
@@ -2366,30 +2414,23 @@ app.get('/resume', (c) => {
               isParsing = true;
 
               parseBtn.disabled = true;
-              parseBtn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-2"></i>解析中...';
+              parseBtn.innerHTML = '<i class="fas fa-spinner loading-spinner mr-2"></i>上传中...';
               progressArea.classList.remove('hidden');
               errorArea.classList.add('hidden');
               
-              // 平滑滚动到进度区域，让用户看到解析进度
+              // 平滑滚动到进度区域
               setTimeout(() => {
                 progressArea.scrollIntoView({ behavior: 'smooth', block: 'center' });
               }, 100);
 
               try {
-                let result;
+                let resumeId;
                 
                 if (selectedFile) {
-                  // 文件模式：使用 MinerU（后端代理上传）
-                  renderDAGNodes([
-                    { id: 'upload', name: '上传文件', status: 'running' },
-                    { id: 'ocr', name: 'MinerU 文档解析', status: 'pending' },
-                    { id: 'parse', name: '简历结构化', status: 'pending' },
-                  ]);
-
-                  // 步骤1: 上传文件到后端，后端代理上传到 MinerU
+                  // Phase 2.1: 文件异步上传流程
+                  // 步骤1: 上传文件，立即获取 resumeId
                   const formData = new FormData();
                   formData.append('file', selectedFile);
-                  formData.append('isOcr', 'true');  // 开启 OCR 以解析简历头部复杂布局（姓名、照片、联系方式区域）
                   
                   const uploadRes = await fetch('/api/resume/mineru/upload', {
                     method: 'POST',
@@ -2401,60 +2442,31 @@ app.get('/resume', (c) => {
                     throw new Error(uploadData.error || '文件上传失败');
                   }
                   
-                  renderDAGNodes([
-                    { id: 'upload', name: '上传文件', status: 'completed' },
-                    { id: 'ocr', name: 'MinerU 文档解析', status: 'running' },
-                    { id: 'parse', name: '简历结构化', status: 'pending' },
-                  ]);
-
-                  // 步骤2: 等待 MinerU 解析完成并获取结构化结果
-                  // 设置 120 秒超时（大文件解析需要较长时间）
-                  let parseRes;
-                  try {
-                    const controller = new AbortController();
-                    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120秒超时
-                    
-                    parseRes = await fetch('/api/resume/mineru/parse', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        batchId: uploadData.batchId,
-                        fileName: uploadData.fileName,
-                      }),
-                      signal: controller.signal,
-                    });
-                    
-                    clearTimeout(timeoutId);
-                    
-                    if (!parseRes.ok) {
-                      throw new Error('解析接口返回错误: ' + parseRes.status);
-                    }
-                    
-                    result = await parseRes.json();
-                  } catch (fetchError) {
-                    // 网络错误或超时
-                    console.error('[前端] 解析请求失败:', fetchError);
-                    if (fetchError.name === 'AbortError') {
-                      throw new Error('解析超时（超过120秒），简历文件可能过大，请尝试压缩后重试');
-                    }
-                    throw new Error('网络请求失败，请检查网络连接后重试');
-                  }
+                  resumeId = uploadData.resumeId;
+                  console.log('[Phase 2.1] 上传成功，resumeId:', resumeId);
                   
-                  if (result.success) {
-                    renderDAGNodes([
-                      { id: 'upload', name: '上传文件', status: 'completed' },
-                      { id: 'ocr', name: 'MinerU 文档解析', status: 'completed' },
-                      { id: 'parse', name: '简历结构化', status: 'completed' },
-                    ]);
-                  }
+                  // 步骤2: 立即开始轮询进度
+                  startProgressPolling(resumeId);
+                  
+                  // 步骤3: 后台开始解析
+                  fetch('/api/resume/mineru/parse', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      batchId: uploadData.batchId,
+                      fileName: uploadData.fileName,
+                      resumeId: resumeId,  // Phase 2.1: 传递 resumeId
+                    }),
+                  }).then(res => res.json()).then(data => {
+                    console.log('[Phase 2.1] 解析完成:', data);
+                  }).catch(err => {
+                    console.error('[Phase 2.1] 后台解析失败:', err);
+                  });
                   
                 } else {
-                  // 文本模式：使用原有 API
-                  renderDAGNodes([
-                    { id: 'preprocess', name: '文本预处理', status: 'running' },
-                    { id: 'parse', name: '简历解析', status: 'pending' },
-                  ]);
-
+                  // 文本模式：同步处理
+                  updateProgress(0, 'processing', '正在处理文本...');
+                  
                   const response = await fetch('/api/resume/parse', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -2463,94 +2475,194 @@ app.get('/resume', (c) => {
                       content: text,
                     }),
                   });
-                  result = await response.json();
+                  const result = await response.json();
                   
-                  if (result.success && result.dagState) {
-                    renderDAGNodes(result.dagState.nodes);
-                  }
-                }
-
-                if (result.success) {
-                  // 保存评测数据
-                  if (result.metrics && window.JobCopilot && window.JobCopilot.saveMetricsBatch) {
-                    window.JobCopilot.saveMetricsBatch(result.metrics);
-                  }
-                  
-                  // 保存到 localStorage
-                  const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
-                  resumes.unshift(result.resume);
-                  localStorage.setItem('jobcopilot_resumes', JSON.stringify(resumes));
-                  
-                  setTimeout(() => {
+                  if (result.success) {
+                    updateProgress(100, 'completed', '解析完成！');
+                    await new Promise(r => setTimeout(r, 1000));
+                    
+                    // 保存到 localStorage
+                    const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+                    resumes.unshift(result.resume);
+                    localStorage.setItem('jobcopilot_resumes', JSON.stringify(resumes));
+                    
                     progressArea.classList.add('hidden');
                     showCurrentResume(result.resume);
                     uploadSection.classList.add('hidden');
-                    parseBtn.disabled = false;
-                    parseBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>解析简历';
-                    isParsing = false; // 重置状态
-                    // 清空输入
-                    textInput.value = '';
-                    selectedFile = null;
-                    fileInput.value = '';
-                    uploadPlaceholder.classList.remove('hidden');
-                    filePreview.classList.add('hidden');
-                  }, 1000);
-                } else {
-                  throw new Error(result.error || '解析失败');
+                    resetForm();
+                  } else {
+                    throw new Error(result.error || '解析失败');
+                  }
                 }
+                
               } catch (error) {
-                console.error('解析失败:', error);
+                console.error('[前端] 解析失败:', error);
                 
-                // 更友好的错误提示
-                let friendlyMessage = '解析失败，请重试';
-                if (error.message && error.message.includes('网络')) {
-                  friendlyMessage = '网络请求失败。可能原因：① 网络不稳定 ② 解析超时（简历较大）。建议：刷新页面后重试';
-                } else if (error.message) {
-                  friendlyMessage = error.message;
-                }
-                
-                errorMessage.textContent = friendlyMessage;
+                errorMessage.textContent = error.message || '解析失败，请重试';
                 errorArea.classList.remove('hidden');
                 progressArea.classList.add('hidden');
-                parseBtn.disabled = false;
-                parseBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>解析简历';
-                isParsing = false; // 重置状态，允许重试
+                resetForm();
               }
             });
-
-            function renderDAGNodes(nodes) {
-              dagNodes.innerHTML = nodes.map(node => {
-                let statusIcon, statusClass, bgClass;
-                switch (node.status) {
-                  case 'completed':
-                    statusIcon = 'fa-check-circle';
-                    statusClass = 'text-green-500';
-                    bgClass = 'bg-green-50 border-green-100';
-                    break;
-                  case 'running':
-                    statusIcon = 'fa-spinner loading-spinner';
-                    statusClass = 'text-blue-500';
-                    bgClass = 'bg-blue-50 border-blue-100';
-                    break;
-                  case 'error':
-                    statusIcon = 'fa-times-circle';
-                    statusClass = 'text-red-500';
-                    bgClass = 'bg-red-50 border-red-100';
-                    break;
-                  default:
-                    statusIcon = 'fa-circle';
-                    statusClass = 'text-gray-300';
-                    bgClass = 'bg-white border-gray-200';
+            
+            // Phase 2.1: 进度轮询函数
+            let pollingTimer = null;
+            let progressStartTime = null;
+            
+            function startProgressPolling(resumeId) {
+              progressStartTime = Date.now();
+              
+              // 立即查询一次
+              pollProgress(resumeId);
+              
+              // 每秒轮询一次
+              pollingTimer = setInterval(() => {
+                pollProgress(resumeId);
+              }, 1000);
+            }
+            
+            async function pollProgress(resumeId) {
+              try {
+                const res = await fetch('/api/resume/progress/' + resumeId);
+                const data = await res.json();
+                
+                if (!data.success) {
+                  console.error('[进度] 查询失败:', data.error);
+                  return;
                 }
-                const duration = node.result?.duration_ms ? '<span class="text-xs text-gray-400 ml-2">(' + (node.result.duration_ms / 1000).toFixed(1) + 's)</span>' : '';
-                return '<div class="flex items-center gap-3 p-3 rounded-lg border ' + bgClass + '">' +
-                  '<i class="fas ' + statusIcon + ' ' + statusClass + ' text-lg"></i>' +
-                  '<div class="flex-1">' +
-                  '<span class="' + (node.status === 'completed' ? 'text-gray-900 font-medium' : 'text-gray-600') + '">' +
-                  node.name + '</span>' + duration +
-                  '</div>' +
-                  '</div>';
-              }).join('');
+                
+                const { status, progress } = data;
+                
+                // 更新进度显示
+                if (progress) {
+                  updateProgress(
+                    progress.percent,
+                    progress.stage,
+                    progress.message,
+                    progress.elapsedTime,
+                    progress.estimatedRemaining
+                  );
+                }
+                
+                // 解析完成
+                if (status === 'completed' && data.resume) {
+                  clearInterval(pollingTimer);
+                  pollingTimer = null;
+                  
+                  console.log('[Phase 2.1] 解析完成，简历数据:', data.resume);
+                  
+                  // 显示100%进度
+                  updateProgress(100, 'completed', '解析完成！', progress.elapsedTime, 0);
+                  
+                  await new Promise(r => setTimeout(r, 1500));
+                  
+                  // 保存到 localStorage
+                  const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
+                  resumes.unshift(data.resume);
+                  localStorage.setItem('jobcopilot_resumes', JSON.stringify(resumes));
+                  
+                  progressArea.classList.add('hidden');
+                  showCurrentResume(data.resume);
+                  uploadSection.classList.add('hidden');
+                  resetForm();
+                }
+                
+              } catch (error) {
+                console.error('[进度] 轮询失败:', error);
+              }
+            }
+            
+            // Phase 2.1: 更新进度 UI
+            function updateProgress(percent, stage, message, elapsedTime, estimatedRemaining) {
+              // 更新进度条
+              document.getElementById('progress-bar').style.width = percent + '%';
+              document.getElementById('progress-percent').textContent = Math.floor(percent) + '%';
+              
+              // 更新阶段和消息
+              document.getElementById('progress-stage').textContent = getStageLabel(stage);
+              document.getElementById('progress-message').textContent = message;
+              
+              // 更新时间
+              if (elapsedTime !== undefined) {
+                document.getElementById('elapsed-time').textContent = elapsedTime;
+              } else if (progressStartTime) {
+                const elapsed = Math.floor((Date.now() - progressStartTime) / 1000);
+                document.getElementById('elapsed-time').textContent = elapsed;
+              }
+              
+              if (estimatedRemaining !== undefined && estimatedRemaining > 0) {
+                document.getElementById('remaining-time').textContent = estimatedRemaining;
+                document.getElementById('remaining-time-container').classList.remove('hidden');
+              }
+              
+              // 更新阶段指示器
+              updateStageIndicators(stage, percent);
+            }
+            
+            // 阶段标签映射
+            function getStageLabel(stage) {
+              const labels = {
+                'uploaded': '文件上传',
+                'waiting': '等待解析',
+                'parsing': 'MinerU 解析',
+                'extracting': '提取信息',
+                'structuring': '结构化处理',
+                'saving': '保存数据',
+                'completed': '解析完成',
+              };
+              return labels[stage] || stage;
+            }
+            
+            // 更新阶段指示器
+            function updateStageIndicators(stage, percent) {
+              const stages = ['uploaded', 'parsing', 'structuring', 'completed'];
+              const thresholds = {
+                'uploaded': 5,
+                'parsing': 30,
+                'structuring': 75,
+                'completed': 100,
+              };
+              
+              stages.forEach(s => {
+                const el = document.getElementById('stage-' + s);
+                const threshold = thresholds[s];
+                
+                if (percent >= threshold) {
+                  // 已完成
+                  el.classList.remove('opacity-30');
+                  el.classList.add('opacity-100');
+                  el.querySelector('.w-6').classList.remove('bg-gray-300');
+                  el.querySelector('.w-6').classList.add('bg-green-500');
+                  el.querySelector('span').classList.remove('text-gray-500');
+                  el.querySelector('span').classList.add('text-green-600', 'font-medium');
+                } else if (stage === s || percent >= threshold - 10) {
+                  // 进行中
+                  el.classList.remove('opacity-30');
+                  el.classList.add('opacity-100');
+                  el.querySelector('.w-6').classList.remove('bg-gray-300');
+                  el.querySelector('.w-6').classList.add('bg-blue-500');
+                  el.querySelector('span').classList.remove('text-gray-500');
+                  el.querySelector('span').classList.add('text-blue-600', 'font-medium');
+                }
+              });
+            }
+            
+            // 重置表单
+            function resetForm() {
+              parseBtn.disabled = false;
+              parseBtn.innerHTML = '<i class="fas fa-magic mr-2"></i>解析简历';
+              isParsing = false;
+              textInput.value = '';
+              selectedFile = null;
+              fileInput.value = '';
+              uploadPlaceholder.classList.remove('hidden');
+              filePreview.classList.add('hidden');
+              
+              if (pollingTimer) {
+                clearInterval(pollingTimer);
+                pollingTimer = null;
+              }
+              progressStartTime = null;
             }
           });
         `
