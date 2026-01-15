@@ -2408,8 +2408,12 @@ app.get('/resume', (c) => {
                   ]);
 
                   // 步骤2: 等待 MinerU 解析完成并获取结构化结果
+                  // 设置 120 秒超时（大文件解析需要较长时间）
                   let parseRes;
                   try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120秒超时
+                    
                     parseRes = await fetch('/api/resume/mineru/parse', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
@@ -2417,7 +2421,10 @@ app.get('/resume', (c) => {
                         batchId: uploadData.batchId,
                         fileName: uploadData.fileName,
                       }),
+                      signal: controller.signal,
                     });
+                    
+                    clearTimeout(timeoutId);
                     
                     if (!parseRes.ok) {
                       throw new Error('解析接口返回错误: ' + parseRes.status);
@@ -2427,6 +2434,9 @@ app.get('/resume', (c) => {
                   } catch (fetchError) {
                     // 网络错误或超时
                     console.error('[前端] 解析请求失败:', fetchError);
+                    if (fetchError.name === 'AbortError') {
+                      throw new Error('解析超时（超过120秒），简历文件可能过大，请尝试压缩后重试');
+                    }
                     throw new Error('网络请求失败，请检查网络连接后重试');
                   }
                   

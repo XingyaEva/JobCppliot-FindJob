@@ -63,17 +63,21 @@ export async function executeResumePreprocess(
     let cleanedText: string;
 
     if (input.type === 'file') {
-      // 文件模式：使用 gpt-4o 进行识别
+      // 文件模式：使用视觉模型进行识别
       if (!input.fileData) {
         throw new Error('文件模式需要提供 fileData');
       }
 
+      // ⚠️ 警告：此接口仅支持图片格式（PNG/JPG/WebP）
+      // PDF文件请使用 /api/resume/mineru/upload 接口
+      if (input.fileName?.toLowerCase().endsWith('.pdf')) {
+        throw new Error('此接口不支持PDF文件，请使用 MinerU API (/api/resume/mineru/upload)');
+      }
+
       console.log('[简历预处理] 使用文件识别模式');
       
-      // 构建图片URL（Base64格式）
-      const mimeType = input.fileName?.toLowerCase().endsWith('.pdf') 
-        ? 'application/pdf' 
-        : 'image/png';
+      // 构建图片URL（Base64格式）- 仅支持图片
+      const mimeType = 'image/png';
       const imageUrl = `data:${mimeType};base64,${input.fileData}`;
 
       // 使用 resume-parse-image Agent 配置
