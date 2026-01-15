@@ -2301,6 +2301,9 @@ app.get('/resume', (c) => {
             let selectedFile = null;
             let fileDataUrl = null;
             let isParsing = false; // 防止重复提交
+            
+            // Phase 2.2: 请求桌面通知权限
+            requestNotificationPermission();
 
             // 检查是否已有简历
             const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
@@ -2479,6 +2482,14 @@ app.get('/resume', (c) => {
                   
                   if (result.success) {
                     updateProgress(100, 'completed', '解析完成！');
+                    
+                    // Phase 2.2: 发送桌面通知
+                    const resumeName = result.resume.basic_info?.name || '简历';
+                    sendDesktopNotification('🎉 简历解析完成！', {
+                      body: \`"\${resumeName}" 已成功解析，点击查看详情\`,
+                      icon: '/favicon.ico',
+                    });
+                    
                     await new Promise(r => setTimeout(r, 1000));
                     
                     // 保存到 localStorage
@@ -2553,6 +2564,13 @@ app.get('/resume', (c) => {
                   
                   // 显示100%进度
                   updateProgress(100, 'completed', '解析完成！', progress.elapsedTime, 0);
+                  
+                  // Phase 2.2: 发送桌面通知
+                  const resumeName = data.resume.basic_info?.name || '简历';
+                  sendDesktopNotification('🎉 简历解析完成！', {
+                    body: \`"\${resumeName}" 已成功解析，点击查看详情\`,
+                    icon: '/favicon.ico',
+                  });
                   
                   await new Promise(r => setTimeout(r, 1500));
                   
@@ -2663,6 +2681,91 @@ app.get('/resume', (c) => {
                 pollingTimer = null;
               }
               progressStartTime = null;
+            }
+            
+            // ==================== Phase 2.2: 桌面通知功能 ====================
+            
+            /**
+             * 请求桌面通知权限
+             */
+            async function requestNotificationPermission() {
+              // 检查浏览器支持
+              if (!('Notification' in window)) {
+                console.log('[桌面通知] 浏览器不支持 Notification API');
+                return;
+              }
+              
+              // 检查当前权限状态
+              if (Notification.permission === 'granted') {
+                console.log('[桌面通知] 已授权');
+                return;
+              }
+              
+              if (Notification.permission === 'denied') {
+                console.log('[桌面通知] 用户已拒绝');
+                return;
+              }
+              
+              // 请求权限（仅在用户首次访问时）
+              try {
+                const permission = await Notification.requestPermission();
+                console.log('[桌面通知] 权限请求结果:', permission);
+              } catch (error) {
+                console.error('[桌面通知] 请求权限失败:', error);
+              }
+            }
+            
+            /**
+             * 发送桌面通知
+             * @param {string} title - 通知标题
+             * @param {object} options - 通知选项
+             */
+            function sendDesktopNotification(title, options = {}) {
+              // 检查浏览器支持
+              if (!('Notification' in window)) {
+                console.warn('[桌面通知] 浏览器不支持');
+                return;
+              }
+              
+              // 检查权限
+              if (Notification.permission !== 'granted') {
+                console.warn('[桌面通知] 未授权，跳过通知');
+                return;
+              }
+              
+              // 默认选项
+              const defaultOptions = {
+                icon: '/favicon.ico',
+                badge: '/favicon.ico',
+                tag: 'job-copilot-resume-parse',
+                requireInteraction: false,
+                ...options,
+              };
+              
+              try {
+                // 创建通知
+                const notification = new Notification(title, defaultOptions);
+                
+                // 点击通知时聚焦窗口并关闭通知
+                notification.onclick = function() {
+                  window.focus();
+                  notification.close();
+                  
+                  // 如果提供了点击回调，执行
+                  if (options.onClick) {
+                    options.onClick();
+                  }
+                };
+                
+                // 5秒后自动关闭
+                setTimeout(() => {
+                  notification.close();
+                }, 5000);
+                
+                console.log('[桌面通知] 已发送:', title);
+              } catch (error) {
+                console.error('[桌面通知] 发送失败:', error);
+              }
             }
           });
         `
