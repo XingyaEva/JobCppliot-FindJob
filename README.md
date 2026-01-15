@@ -56,8 +56,18 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 - 📝 Phase 2.3 文档：[PHASE2_3_COMPLETE.md](./PHASE2_3_COMPLETE.md)
 - 📊 项目进度报告：[PROJECT_PROGRESS_REPORT.md](./PROJECT_PROGRESS_REPORT.md)
 
-**测试地址：**
-https://3000-i6as8vu96xqdxc2jivh8w-ad490db5.sandbox.novita.ai/resume
+**在线测试：**
+- 简历上传页: https://3000-i6as8vu96xqdxc2jivh8w-ad490db5.sandbox.novita.ai/resume
+- 首页: https://3000-i6as8vu96xqdxc2jivh8w-ad490db5.sandbox.novita.ai
+- API健康检查: https://3000-i6as8vu96xqdxc2jivh8w-ad490db5.sandbox.novita.ai/api/health
+
+**测试要点：**
+1. ✅ 上传PDF文件（自动检测类型并显示预计时间）
+2. ✅ 点击"解析简历"（立即显示进度条）
+3. ✅ 观察实时进度更新（每秒刷新）
+4. ✅ 查看4阶段指示器动画（上传→解析→结构化→完成）
+5. ✅ 等待桌面通知（解析完成时推送）
+6. ✅ 查看解析结果（自动显示简历详情）
 
 **下一步计划：**
 - **Phase 3**: PyMuPDF 微服务 + 智能路由（下周启动）
