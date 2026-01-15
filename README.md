@@ -13,6 +13,20 @@ AI驱动的JD解析、简历匹配、面试准备、简历优化工具
 
 **Phase 6 - 模型评测与优化** ✅ 已完成
 
+### 🔧 最近修复 (2026-01-15)
+
+**问题：** PDF简历解析失败，显示 "Failed to fetch" 和 "image format is illegal"  
+**原因：** 旧的图片识别API（qwen-vl-max）不支持PDF格式  
+**解决：** 
+- ✅ 后端明确拒绝PDF使用旧接口，引导使用MinerU API
+- ✅ 添加清晰的错误提示
+- ⏳ 前端需要确认使用正确的API和120秒超时设置
+
+**相关文档：**
+- 完整分析：[RESUME_PARSE_ANALYSIS.md](./RESUME_PARSE_ANALYSIS.md)
+- 快速指南：[QUICK_FIX_GUIDE.md](./QUICK_FIX_GUIDE.md)
+- 详细方案：[RESUME_PARSE_FIX.md](./RESUME_PARSE_FIX.md)
+
 ### 已实现功能
 
 #### Phase 0 ✅
