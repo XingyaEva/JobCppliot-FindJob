@@ -166,7 +166,16 @@ export interface Resume {
   is_master: boolean;                // 是否为主版本
   
   // 状态
-  status: 'pending' | 'processing' | 'completed' | 'error';
+  status: 'pending' | 'processing' | 'parsing' | 'completed' | 'error';
+  error_message?: string;
+  
+  // Phase 2: 进度信息
+  current_stage?: 'upload' | 'parsing' | 'structuring';  // 当前阶段
+  progress_percent?: number;         // 进度百分比 (0-100)
+  progress_message?: string;         // 进度提示消息
+  elapsed_time?: number;             // 已用时间（秒）
+  estimated_remaining?: number;      // 预计剩余时间（秒）
+  
   created_at: string;
   updated_at: string;
 }
@@ -343,6 +352,21 @@ export interface ResumeOptimization {
     key_improvements: string[];
   };
   created_at: string;
+}
+
+// ==================== Phase 2: 简历解析进度相关 ====================
+
+/** 解析阶段 */
+export type ParseStage = 'upload' | 'parsing' | 'structuring';
+
+/** 解析进度信息 */
+export interface ParseProgress {
+  status: 'pending' | 'parsing' | 'completed' | 'error';
+  stage: ParseStage;
+  percent: number;                   // 0-100
+  message: string;
+  elapsed_time: number;              // 秒
+  estimated_remaining: number;       // 秒
 }
 
 // ==================== Agent相关 ====================

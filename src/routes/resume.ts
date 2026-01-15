@@ -15,12 +15,50 @@ import {
   parseDocumentByUrl,
   type MinerUTaskState 
 } from '../core/mineru-client';
-import type { Resume, ResumeVersion, Match, DAGState } from '../types';
+import type { Resume, ResumeVersion, Match, DAGState, ParseProgress } from '../types';
 
 const resumeRoutes = new Hono();
 
 // 存储进行中的DAG状态（内存缓存）
 const dagStates = new Map<string, DAGState>();
+
+// 内存缓存解析进度 (resumeId -> ParseProgress)
+const parseProgressMap = new Map<string, ParseProgress>();
+
+/**
+ * 更新解析进度
+ */
+function updateParseProgress(resumeId: string, progress: number, stage: string, message?: string) {
+  const now = Date.now();
+  const existing = parseProgressMap.get(resumeId);
+  
+  const progressData: ParseProgress = {
+    resumeId,
+    progress: Math.min(Math.max(progress, 0), 100), // 确保在 0-100 之间
+    stage,
+    message: message || stage,
+    startTime: existing?.startTime || now,
+    lastUpdate: now,
+    estimatedTimeRemaining: existing ? Math.max(0, ((now - existing.startTime) / progress) * (100 - progress)) : 60000,
+  };
+  
+  parseProgressMap.set(resumeId, progressData);
+  console.log(`[Progress] ${resumeId}: ${progress}% - ${stage}`);
+}
+
+/**
+ * 获取解析进度
+ */
+function getParseProgress(resumeId: string): ParseProgress | null {
+  return parseProgressMap.get(resumeId) || null;
+}
+
+/**
+ * 清理解析进度（解析完成后）
+ */
+function clearParseProgress(resumeId: string) {
+  parseProgressMap.delete(resumeId);
+}
 
 /**
  * 创建简历解析DAG并执行
@@ -149,9 +187,14 @@ resumeRoutes.post('/mineru/upload', async (c) => {
 
     console.log(`[MinerU] 文件上传成功，等待解析...`);
 
-    // 返回 batchId，让前端轮询解析结果
+    // Phase 2.1: 生成 resumeId 并初始化进度
+    const resumeId = generateId();
+    updateParseProgress(resumeId, 5, 'uploaded', '文件上传成功，等待解析...');
+
+    // 返回 resumeId 和 batchId，让前端轮询解析结果
     return c.json({
       success: true,
+      resumeId,           // Phase 2.1: 返回 resumeId 供前端立即跳转
       batchId: urlResult.batchId,
       fileName: fileName,
       message: '文件上传成功，请轮询解析结果',
@@ -173,7 +216,7 @@ resumeRoutes.post('/mineru/upload', async (c) => {
 resumeRoutes.post('/mineru/parse', async (c) => {
   try {
     const body = await c.req.json();
-    const { batchId, fileName } = body;
+    const { batchId, fileName, resumeId } = body;
 
     if (!batchId || !fileName) {
       return c.json({ success: false, error: '缺少 batchId 或 fileName 参数' }, 400);
@@ -181,21 +224,41 @@ resumeRoutes.post('/mineru/parse', async (c) => {
 
     console.log(`[MinerU] 步骤3: 轮询解析结果，batch_id: ${batchId}, 文件: ${fileName}`);
 
+    // 如果有 resumeId，初始化进度
+    if (resumeId) {
+      updateParseProgress(resumeId, 10, 'waiting', '等待MinerU解析...');
+    }
+
     // 等待 MinerU 解析完成
     const mineruResult = await waitForBatchCompletion(batchId, fileName, (progress) => {
       console.log(`[MinerU] 解析进度: ${progress.state}, ${progress.extractedPages || 0}/${progress.totalPages || '?'}`);
+      
+      // 更新进度：30-70%
+      if (resumeId && progress.extractedPages && progress.totalPages) {
+        const mineruProgress = 30 + (progress.extractedPages / progress.totalPages) * 40;
+        updateParseProgress(resumeId, Math.floor(mineruProgress), 'parsing', `解析中 ${progress.extractedPages}/${progress.totalPages} 页...`);
+      }
     });
 
     if (!mineruResult.success) {
+      if (resumeId) {
+        clearParseProgress(resumeId);
+      }
       return c.json({ success: false, error: mineruResult.error }, 500);
     }
 
     console.log(`[MinerU] 步骤4: 文档解析完成，开始结构化处理...`);
+    if (resumeId) {
+      updateParseProgress(resumeId, 75, 'extracting', '正在提取结构化信息...');
+    }
 
     // 使用解析后的 Markdown 进行简历结构化
     const cleanedText = mineruResult.markdown || '';
     
     if (cleanedText.length < 50) {
+      if (resumeId) {
+        clearParseProgress(resumeId);
+      }
       return c.json({ success: false, error: '文档内容过短或解析失败' }, 400);
     }
 
@@ -205,6 +268,10 @@ resumeRoutes.post('/mineru/parse', async (c) => {
     const possibleNameFromFile = fileNameWithoutExt.split(/[_\-\s]+/)[0]; // 取第一段作为可能的姓名
     console.log(`[MinerU] 文件名提取的可能姓名: ${possibleNameFromFile}`);
 
+    if (resumeId) {
+      updateParseProgress(resumeId, 85, 'structuring', '正在结构化处理...');
+    }
+
     // 调用简历解析 Agent 进行结构化（传递文件名作为辅助信息）
     const parseResult = await executeResumeParse({ 
       cleanedText,
@@ -212,14 +279,21 @@ resumeRoutes.post('/mineru/parse', async (c) => {
     });
 
     if (!parseResult.success) {
+      if (resumeId) {
+        clearParseProgress(resumeId);
+      }
       return c.json({ success: false, error: parseResult.error }, 500);
     }
 
-    const resumeId = generateId();
+    const finalResumeId = resumeId || generateId();
+    
+    if (resumeId) {
+      updateParseProgress(resumeId, 95, 'saving', '正在保存...');
+    }
     
     // 创建简历记录
     const resume: Resume = {
-      id: resumeId,
+      id: finalResumeId,
       name: parseResult.data!.basic_info?.name || '未命名简历',
       original_file_name: fileName,  // 保存原始文件名
       basic_info: parseResult.data!.basic_info,
@@ -238,11 +312,18 @@ resumeRoutes.post('/mineru/parse', async (c) => {
       updated_at: now(),
     };
 
-    console.log(`[MinerU] 简历结构化完成，ID: ${resumeId}, 姓名: ${resume.basic_info?.name}`);
+    console.log(`[MinerU] 简历结构化完成，ID: ${finalResumeId}, 姓名: ${resume.basic_info?.name}`);
+    
+    // 完成，清理进度
+    if (resumeId) {
+      updateParseProgress(resumeId, 100, 'completed', '解析完成！');
+      // 延迟清理，让前端有机会获取到100%的进度
+      setTimeout(() => clearParseProgress(resumeId), 5000);
+    }
 
     return c.json({
       success: true,
-      resumeId,
+      resumeId: finalResumeId,
       resume,
       zipUrl: mineruResult.zipUrl,
     });
@@ -713,6 +794,104 @@ export async function generateTargetedResume(c: any) {
       error: error instanceof Error ? error.message : '未知错误',
     }, 500);
   }
+}
+
+// ==================== Phase 2: 简历解析进度 API ====================
+
+/**
+ * GET /api/resume/progress/:id - 获取简历解析进度
+ * 
+ * Phase 2.1.1: 实时进度查询接口
+ */
+resumeRoutes.get('/progress/:id', async (c) => {
+  try {
+    const resumeId = c.req.param('id');
+    
+    // 先从进度缓存中查找
+    const progress = getParseProgress(resumeId);
+    
+    if (progress) {
+      // 解析进行中，返回实时进度
+      const elapsed = Date.now() - progress.startTime;
+      return c.json({
+        success: true,
+        status: 'parsing',
+        progress: {
+          percent: progress.progress,
+          stage: progress.stage,
+          message: progress.message,
+          elapsedTime: Math.floor(elapsed / 1000), // 秒
+          estimatedRemaining: Math.floor(progress.estimatedTimeRemaining / 1000), // 秒
+        },
+      });
+    }
+    
+    // 如果进度缓存中没有，查找简历记录
+    const resume = resumeStorage.getById(resumeId);
+    
+    if (!resume) {
+      return c.json({ success: false, error: '简历不存在' }, 404);
+    }
+    
+    // 返回最终状态
+    return c.json({
+      success: true,
+      status: resume.status, // 'completed', 'error', 等
+      progress: {
+        percent: resume.status === 'completed' ? 100 : 0,
+        stage: resume.status === 'completed' ? 'completed' : 'unknown',
+        message: resume.status === 'completed' ? '解析完成' : (resume.status === 'error' ? '解析失败' : '等待中'),
+        elapsedTime: 0,
+        estimatedRemaining: 0,
+      },
+      resume: resume.status === 'completed' ? resume : undefined,
+    });
+  } catch (error) {
+    console.error('[API] 获取进度失败:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+    }, 500);
+  }
+});
+
+/**
+ * 更新简历解析进度
+ * Phase 2.1.2: 进度更新辅助函数
+ */
+export function updateResumeProgress(
+  resumeId: string,
+  stage: 'upload' | 'parsing' | 'structuring',
+  percent: number,
+  message: string
+) {
+  const resume = resumeStorage.get(resumeId);
+  if (!resume) {
+    console.warn(`[进度更新] 简历不存在: ${resumeId}`);
+    return;
+  }
+  
+  const startTime = new Date(resume.created_at).getTime();
+  const now = Date.now();
+  const elapsedTime = Math.floor((now - startTime) / 1000);
+  
+  // 根据当前进度估算剩余时间
+  // 总预计时间：45秒（Phase 1 优化后）
+  const totalEstimated = 45;
+  const estimatedRemaining = percent >= 100 ? 0 : Math.max(0, Math.floor(totalEstimated * (1 - percent / 100)));
+  
+  // 更新进度信息
+  resume.current_stage = stage;
+  resume.progress_percent = percent;
+  resume.progress_message = message;
+  resume.elapsed_time = elapsedTime;
+  resume.estimated_remaining = estimatedRemaining;
+  resume.status = percent >= 100 ? 'completed' : 'parsing';
+  resume.updated_at = now();
+  
+  resumeStorage.set(resumeId, resume);
+  
+  console.log(`[进度更新] ${resumeId}: ${stage} ${percent}% - ${message} (剩余${estimatedRemaining}秒)`);
 }
 
 export default resumeRoutes;
