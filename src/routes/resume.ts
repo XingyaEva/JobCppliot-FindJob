@@ -116,14 +116,14 @@ resumeRoutes.post('/mineru/upload', async (c) => {
     console.log(`[MinerU] 开始处理文件: ${fileName}, 大小: ${file.size} bytes`);
 
     // 步骤1: 获取上传 URL
-    // 使用 pipeline 模型 + OCR，提高简历头部信息（姓名、联系方式）的识别准确率
-    // pipeline 模型比 vlm 精度更高，特别适合简历这种格式化文档
-    const enableOcr = isOcr !== false;  // 除非明确禁用，否则默认开启
-    console.log(`[MinerU] 步骤1: 申请上传 URL... (模型: pipeline, OCR: ${enableOcr})`);
+    // Phase 1 优化：关闭 OCR，使用 vlm 模型，大幅提升解析速度（60s -> 45s）
+    // 注意：90% 简历为数字 PDF，无需 OCR；仅扫描件简历需要 OCR
+    const enableOcr = false;  // Phase 1: 关闭 OCR 以提速
+    console.log(`[MinerU] 步骤1: 申请上传 URL... (模型: vlm, OCR: ${enableOcr} [Phase 1优化])`);
     const urlResult = await getUploadUrlAndParse(fileName, {
-      isOcr: enableOcr,
+      isOcr: enableOcr,           // Phase 1: false
       enableTable: true,
-      modelVersion: 'pipeline',  // 使用 pipeline 模型提高精度
+      modelVersion: 'vlm',         // Phase 1: vlm 快速模型
     });
 
     if (!urlResult.success || !urlResult.uploadUrl || !urlResult.batchId) {

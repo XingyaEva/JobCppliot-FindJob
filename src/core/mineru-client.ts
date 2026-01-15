@@ -10,8 +10,8 @@ const MINERU_CONFIG = {
   baseUrl: 'https://mineru.net/api/v4',
   token: 'eyJ0eXBlIjoiSldUIiwiYWxnIjoiSFM1MTIifQ.eyJqdGkiOiI2NDkwMDA0OSIsInJvbCI6IlJPTEVfUkVHSVNURVIiLCJpc3MiOiJPcGVuWExhYiIsImlhdCI6MTc2ODM3Mjk0OCwiY2xpZW50SWQiOiJsa3pkeDU3bnZ5MjJqa3BxOXgydyIsInBob25lIjoiMTk1MjA2MDYzMDUiLCJvcGVuSWQiOm51bGwsInV1aWQiOiIxNGFhODBkOC00YmMyLTRlYTYtYmYwZi01NDRmOGIwZDQyNDkiLCJlbWFpbCI6IiIsImV4cCI6MTc2OTU4MjU0OH0.m0JXHpkiArXDCgLAxt0LSOZm6LEzI7h56yh3JMReRokGCGMXc3p9hmw_iJdKRbaG-7XHNQ0ftlAP_AyGaPAEVQ',
   // 轮询配置
-  pollInterval: 2000,  // 2秒轮询一次
-  maxPollAttempts: 60, // 最多轮询60次（2分钟）
+  pollInterval: 1000,  // 1秒轮询一次（Phase 1 优化：加快轮询速度）
+  maxPollAttempts: 120, // 最多轮询120次（2分钟）
 };
 
 /** 任务状态 */
