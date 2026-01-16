@@ -15,6 +15,11 @@ import {
   parseDocumentByUrl,
   type MinerUTaskState 
 } from '../core/mineru-client';
+import { 
+  parsePDFWithPython, 
+  analyzePDFType, 
+  checkPythonServiceHealth 
+} from '../core/python-client';
 import type { Resume, ResumeVersion, Match, DAGState, ParseProgress } from '../types';
 
 const resumeRoutes = new Hono();
@@ -128,6 +133,257 @@ async function runResumeParseDAG(
     parsedResume: results['parse'],
     metrics,
   };
+}
+
+// ==================== 智能 PDF 上传 API (Python + MinerU 混合) ====================
+
+/**
+ * POST /api/resume/upload-smart - 智能 PDF 上传（推荐）
+ * 
+ * 策略：
+ * 1. 快速分析 PDF 类型
+ * 2. 数字 PDF → Python pdfplumber (5-10s)
+ * 3. 扫描件 → MinerU + OCR (45-60s)
+ */
+resumeRoutes.post('/upload-smart', async (c) => {
+  try {
+    const formData = await c.req.formData();
+    const file = formData.get('file') as File;
+    const forceMineru = formData.get('forceMineru') === 'true';
+    
+    if (!file) {
+      return c.json({ success: false, error: '缺少文件' }, 400);
+    }
+
+    console.log(`[Smart Upload] 收到文件: ${file.name}, 大小: ${file.size}`);
+    
+    const resumeId = generateId();
+    updateParseProgress(resumeId, 5, 'analyzing', '正在分析文档类型...');
+    
+    let cleanedText = '';
+    let parseMethod = '';
+    
+    // 如果用户强制使用 MinerU
+    if (forceMineru) {
+      console.log('[Smart Upload] 用户选择 MinerU 深度解析');
+      return await uploadToMinerU(c, file, resumeId);
+    }
+    
+    // Step 1: 检查 Python 服务健康状态
+    const pythonHealthy = await checkPythonServiceHealth();
+    
+    if (!pythonHealthy) {
+      console.warn('[Smart Upload] Python 服务不可用，降级到 MinerU');
+      return await uploadToMinerU(c, file, resumeId);
+    }
+    
+    // Step 2: 快速分析 PDF 类型
+    const fileBuffer = await file.arrayBuffer();
+    updateParseProgress(resumeId, 15, 'analyzing', '正在检测 PDF 类型...');
+    
+    const analysis = await analyzePDFType(fileBuffer, file.name);
+    
+    if (analysis.success && !analysis.is_scanned) {
+      // 数字 PDF - 使用 Python 快速提取
+      console.log('[Smart Upload] ✅ 检测到数字 PDF，使用 pdfplumber');
+      updateParseProgress(resumeId, 25, 'extracting', '正在快速提取文本...');
+      
+      const parseResult = await parsePDFWithPython(fileBuffer, file.name);
+      
+      if (parseResult.success && parseResult.text && parseResult.text.length > 100) {
+        cleanedText = parseResult.text;
+        parseMethod = 'pdfplumber';
+        console.log(`[Smart Upload] pdfplumber 成功: ${parseResult.pages} 页, ${parseResult.duration_ms}ms`);
+      } else {
+        console.warn('[Smart Upload] pdfplumber 提取失败或内容过短，降级到 MinerU');
+        return await uploadToMinerU(c, file, resumeId);
+      }
+    } else {
+      // 扫描件或分析失败 - 使用 MinerU
+      console.log('[Smart Upload] 📷 检测到扫描件或分析失败，使用 MinerU');
+      return await uploadToMinerU(c, file, resumeId);
+    }
+    
+    // Step 3: LLM 结构化提取
+    updateParseProgress(resumeId, 70, 'structuring', '正在提取结构化信息...');
+    
+    // 从文件名提取可能的姓名
+    const fileNameWithoutExt = file.name.replace(/\.[^/.]+$/, '');
+    const possibleName = fileNameWithoutExt.split(/[_\-\s]+/)[0];
+    
+    const structureResult = await executeResumeParse({ 
+      cleanedText,
+      fileName: possibleName
+    });
+    
+    if (!structureResult.success) {
+      clearParseProgress(resumeId);
+      return c.json({ success: false, error: structureResult.error }, 500);
+    }
+    
+    // Step 4: 保存简历
+    updateParseProgress(resumeId, 95, 'saving', '正在保存...');
+    
+    const resume: Resume = {
+      id: resumeId,
+      name: structureResult.data!.basic_info?.name || '未命名简历',
+      original_file_name: file.name,
+      basic_info: structureResult.data!.basic_info,
+      education: structureResult.data!.education,
+      work_experience: structureResult.data!.work_experience,
+      projects: structureResult.data!.projects,
+      skills: structureResult.data!.skills,
+      ability_tags: structureResult.data!.ability_tags,
+      raw_content: cleanedText,
+      version: 1,
+      version_tag: '基础版',
+      linked_jd_ids: [],
+      is_master: true,
+      status: 'completed',
+      created_at: now(),
+      updated_at: now(),
+    };
+    
+    updateParseProgress(resumeId, 100, 'completed', '解析完成！');
+    setTimeout(() => clearParseProgress(resumeId), 5000);
+    
+    console.log(`[Smart Upload] 解析完成: ${parseMethod}, 姓名: ${resume.name}`);
+    
+    return c.json({
+      success: true,
+      resumeId,
+      resume,
+      parseMethod,
+      message: `使用 ${parseMethod} 解析成功`,
+    });
+    
+  } catch (error) {
+    console.error('[Smart Upload] 处理失败:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+    }, 500);
+  }
+});
+
+/**
+ * 降级到 MinerU 的辅助函数
+ */
+async function uploadToMinerU(c: any, file: File, resumeId: string) {
+  try {
+    updateParseProgress(resumeId, 10, 'mineru-upload', '正在上传到 MinerU...');
+    
+    // 调用现有的 MinerU 逻辑
+    const fileName = file.name;
+    const fileBuffer = await file.arrayBuffer();
+    
+    // 获取上传 URL
+    const urlResult = await getUploadUrlAndParse(fileName, {
+      isOcr: false,
+      enableTable: true,
+      modelVersion: 'vlm',
+    });
+
+    if (!urlResult.success || !urlResult.uploadUrl || !urlResult.batchId) {
+      throw new Error(urlResult.error || '获取上传URL失败');
+    }
+
+    // 上传文件
+    updateParseProgress(resumeId, 20, 'mineru-upload', '正在上传文件...');
+    
+    const uploadRes = await fetch(urlResult.uploadUrl, {
+      method: 'PUT',
+      body: fileBuffer,
+    });
+
+    if (!uploadRes.ok) {
+      throw new Error(`上传失败: ${uploadRes.status}`);
+    }
+
+    updateParseProgress(resumeId, 30, 'mineru-parse', '等待 MinerU 解析...');
+
+    // 等待解析完成
+    const mineruResult = await waitForBatchCompletion(
+      urlResult.batchId,
+      fileName,
+      (progress) => {
+        if (progress.extractedPages && progress.totalPages) {
+          const percent = 30 + (progress.extractedPages / progress.totalPages) * 40;
+          updateParseProgress(
+            resumeId,
+            Math.floor(percent),
+            'mineru-parse',
+            `解析中 ${progress.extractedPages}/${progress.totalPages} 页...`
+          );
+        }
+      }
+    );
+
+    if (!mineruResult.success) {
+      throw new Error(mineruResult.error || 'MinerU 解析失败');
+    }
+
+    const cleanedText = mineruResult.markdown || '';
+    
+    if (cleanedText.length < 50) {
+      throw new Error('文档内容过短或解析失败');
+    }
+
+    updateParseProgress(resumeId, 85, 'structuring', '正在提取结构化信息...');
+
+    // 结构化提取
+    const fileNameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+    const possibleName = fileNameWithoutExt.split(/[_\-\s]+/)[0];
+    
+    const parseResult = await executeResumeParse({ 
+      cleanedText,
+      fileName: possibleName
+    });
+
+    if (!parseResult.success) {
+      throw new Error(parseResult.error || '结构化失败');
+    }
+
+    // 保存简历
+    const resume: Resume = {
+      id: resumeId,
+      name: parseResult.data!.basic_info?.name || '未命名简历',
+      original_file_name: fileName,
+      basic_info: parseResult.data!.basic_info,
+      education: parseResult.data!.education,
+      work_experience: parseResult.data!.work_experience,
+      projects: parseResult.data!.projects,
+      skills: parseResult.data!.skills,
+      ability_tags: parseResult.data!.ability_tags,
+      raw_content: cleanedText,
+      version: 1,
+      version_tag: '基础版',
+      linked_jd_ids: [],
+      is_master: true,
+      status: 'completed',
+      created_at: now(),
+      updated_at: now(),
+    };
+
+    updateParseProgress(resumeId, 100, 'completed', '解析完成！');
+    setTimeout(() => clearParseProgress(resumeId), 5000);
+
+    return c.json({
+      success: true,
+      resumeId,
+      resume,
+      parseMethod: 'mineru',
+      zipUrl: mineruResult.zipUrl,
+    });
+    
+  } catch (error) {
+    clearParseProgress(resumeId);
+    console.error('[MinerU Fallback] 失败:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+    }, 500);
+  }
 }
 
 // ==================== MinerU 文档解析 API ====================
