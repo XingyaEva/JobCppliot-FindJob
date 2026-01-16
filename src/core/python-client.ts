@@ -6,7 +6,7 @@
 // 配置 Python 微服务 URL
 // 从环境变量读取，在 wrangler.jsonc 中配置
 // @ts-ignore - Cloudflare Workers 环境变量
-const PYTHON_SERVICE_URL = globalThis.PYTHON_SERVICE_URL || 'https://pdf-parser-service-production.up.railway.app';
+const PYTHON_SERVICE_URL = globalThis.PYTHON_SERVICE_URL || 'https://pdf-parser-service-y24s.onrender.com';
 
 export interface PythonParseResult {
   success: boolean;

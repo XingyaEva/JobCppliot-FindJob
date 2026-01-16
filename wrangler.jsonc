@@ -7,7 +7,7 @@
     "nodejs_compat"
   ],
   "vars": {
-    "PYTHON_SERVICE_URL": "https://pdf-parser-service-production.up.railway.app"
+    "PYTHON_SERVICE_URL": "https://pdf-parser-service-y24s.onrender.com"
   },
   // "kv_namespaces": [
   // "kv_namespaces": [
