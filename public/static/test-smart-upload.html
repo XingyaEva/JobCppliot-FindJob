@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>测试智能上传</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-8">
+        <h1 class="text-2xl font-bold mb-6">🚀 智能简历解析测试</h1>
+        
+        <div class="mb-6">
+            <label class="block text-sm font-medium mb-2">选择 PDF 文件</label>
+            <input type="file" id="fileInput" accept=".pdf" 
+                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4
+                          file:rounded-lg file:border-0 file:text-sm file:font-semibold
+                          file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+        </div>
+        
+        <div class="mb-6">
+            <label class="flex items-center gap-2">
+                <input type="checkbox" id="forceMineru" class="w-4 h-4 text-blue-600 rounded"/>
+                <span class="text-sm">强制使用 MinerU 深度解析（慢但全面）</span>
+            </label>
+        </div>
+        
+        <button id="uploadBtn" 
+                class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            开始解析
+        </button>
+        
+        <!-- 进度显示 -->
+        <div id="progress" class="hidden mt-6">
+            <div class="bg-blue-50 rounded-lg p-4">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div>
+                        <p class="font-medium text-gray-900">正在解析...</p>
+                        <p id="progressMsg" class="text-sm text-gray-500">准备中...</p>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                </div>
+                <p id="progressPercent" class="text-right text-sm text-gray-600 mt-1">0%</p>
+            </div>
+        </div>
+        
+        <!-- 结果显示 -->
+        <div id="result" class="hidden mt-6">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h3 class="font-medium text-green-900 mb-2">✅ 解析成功！</h3>
+                <div id="resultContent" class="text-sm text-gray-700"></div>
+                <button onclick="location.reload()" class="mt-4 text-blue-600 hover:text-blue-700 text-sm">
+                    再次测试
+                </button>
+            </div>
+        </div>
+        
+        <!-- 错误显示 -->
+        <div id="error" class="hidden mt-6">
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h3 class="font-medium text-red-900 mb-2">❌ 解析失败</h3>
+                <p id="errorMsg" class="text-sm text-red-700"></p>
+                <button onclick="location.reload()" class="mt-4 text-blue-600 hover:text-blue-700 text-sm">
+                    重试
+                </button>
+            </div>
+        </div>
+        
+        <!-- 服务状态 -->
+        <div class="mt-6 p-4 bg-gray-50 rounded-lg text-sm">
+            <p class="font-medium mb-2">服务状态：</p>
+            <p id="serviceStatus" class="text-gray-600">检查中...</p>
+        </div>
+    </div>
+    
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const forceMineru = document.getElementById('forceMineru');
+        const progress = document.getElementById('progress');
+        const progressBar = document.getElementById('progressBar');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressMsg = document.getElementById('progressMsg');
+        const result = document.getElementById('result');
+        const resultContent = document.getElementById('resultContent');
+        const error = document.getElementById('error');
+        const errorMsg = document.getElementById('errorMsg');
+        const serviceStatus = document.getElementById('serviceStatus');
+        
+        // 检查服务状态
+        async function checkService() {
+            try {
+                const res = await fetch('https://pdf-parser-service-y24s.onrender.com/health');
+                const data = await res.json();
+                if (data.status === 'ok') {
+                    serviceStatus.innerHTML = '✅ Python 服务正常 (Render)';
+                } else {
+                    serviceStatus.innerHTML = '⚠️ Python 服务异常';
+                }
+            } catch (err) {
+                serviceStatus.innerHTML = '❌ Python 服务不可用（将自动使用 MinerU）';
+            }
+        }
+        
+        checkService();
+        
+        uploadBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('请选择文件');
+                return;
+            }
+            
+            // 重置UI
+            progress.classList.remove('hidden');
+            result.classList.add('hidden');
+            error.classList.add('hidden');
+            uploadBtn.disabled = true;
+            
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('forceMineru', forceMineru.checked ? 'true' : 'false');
+            
+            try {
+                progressMsg.textContent = '正在上传...';
+                progressBar.style.width = '10%';
+                progressPercent.textContent = '10%';
+                
+                const response = await fetch('/api/resume/upload-smart', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                
+                if (data.success) {
+                    progressBar.style.width = '100%';
+                    progressPercent.textContent = '100%';
+                    progressMsg.textContent = '解析完成！';
+                    
+                    setTimeout(() => {
+                        progress.classList.add('hidden');
+                        result.classList.remove('hidden');
+                        
+                        resultContent.innerHTML = `
+                            <p><strong>姓名:</strong> ${data.resume.basic_info?.name || '未知'}</p>
+                            <p><strong>联系方式:</strong> ${data.resume.basic_info?.contact || '未知'}</p>
+                            <p><strong>求职意向:</strong> ${data.resume.basic_info?.target_position || '未指定'}</p>
+                            <p class="mt-2"><strong>解析方法:</strong> ${data.parseMethod}</p>
+                            <p><strong>简历ID:</strong> ${data.resumeId}</p>
+                            <a href="/resume/${data.resumeId}" class="inline-block mt-3 text-blue-600 hover:underline">
+                                查看详情 →
+                            </a>
+                        `;
+                    }, 500);
+                } else {
+                    throw new Error(data.error || '解析失败');
+                }
+            } catch (err) {
+                progress.classList.add('hidden');
+                error.classList.remove('hidden');
+                errorMsg.textContent = err.message;
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

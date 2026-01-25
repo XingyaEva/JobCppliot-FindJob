@@ -4,9 +4,10 @@
  */
 
 // 配置 Python 微服务 URL
-// 从环境变量读取，在 wrangler.jsonc 中配置
+// 优先使用阿里云服务器（无冷启动，秒级响应）
+// 备用 Render 服务（有冷启动延迟）
 // @ts-ignore - Cloudflare Workers 环境变量
-const PYTHON_SERVICE_URL = globalThis.PYTHON_SERVICE_URL || 'https://pdf-parser-service-y24s.onrender.com';
+const PYTHON_SERVICE_URL = globalThis.PYTHON_SERVICE_URL || 'http://47.110.92.210/pdf-parser';
 
 export interface PythonParseResult {
   success: boolean;

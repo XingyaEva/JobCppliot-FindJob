@@ -66,7 +66,48 @@ ${input.rawText.substring(0, 2000)}`;
     // 解析JSON响应
     const analysis = parseJsonResponse<BAnalysis>(response);
 
-    // 数据验证和默认值
+    /**
+     * 数据格式标准化函数
+     * 将字符串转换为数组（兼容LLM返回的不同格式）
+     */
+    function toStringArray(val: unknown): string[] {
+      if (!val) return [];
+      if (Array.isArray(val)) return val.filter(item => typeof item === 'string');
+      if (typeof val === 'string') {
+        // 处理逗号分隔的字符串，如 "AI, SaaS" -> ["AI", "SaaS"]
+        return val.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+      }
+      return [];
+    }
+
+    /**
+     * 标准化能力列表
+     * 将纯字符串数组转换为对象数组
+     */
+    function normalizeCapabilities(caps: unknown): Array<{name: string; detail: string}> {
+      if (!caps) return [];
+      if (!Array.isArray(caps)) return [];
+      
+      return caps.map(cap => {
+        // 如果已经是对象格式，保持不变
+        if (typeof cap === 'object' && cap !== null && 'name' in cap) {
+          return {
+            name: String(cap.name || ''),
+            detail: String((cap as any).detail || '')
+          };
+        }
+        // 如果是纯字符串，转换为对象格式
+        if (typeof cap === 'string') {
+          return {
+            name: cap,
+            detail: ''
+          };
+        }
+        return { name: '', detail: '' };
+      }).filter(cap => cap.name); // 过滤掉空名称的能力
+    }
+
+    // 数据验证和默认值（含格式标准化）
     const result: BAnalysis = {
       B1_industry_requirement: {
         required: analysis.B1_industry_requirement?.required ?? false,
@@ -78,24 +119,20 @@ ${input.rawText.substring(0, 2000)}`;
       B2_tech_requirement: {
         education: analysis.B2_tech_requirement?.education || '不限',
         tech_depth: {
-          '了解': analysis.B2_tech_requirement?.tech_depth?.['了解'] || [],
-          '熟悉': analysis.B2_tech_requirement?.tech_depth?.['熟悉'] || [],
-          '精通': analysis.B2_tech_requirement?.tech_depth?.['精通'] || [],
+          '了解': toStringArray(analysis.B2_tech_requirement?.tech_depth?.['了解']),
+          '熟悉': toStringArray(analysis.B2_tech_requirement?.tech_depth?.['熟悉']),
+          '精通': toStringArray(analysis.B2_tech_requirement?.tech_depth?.['精通']),
         },
         summary: analysis.B2_tech_requirement?.summary || 'JD未明确提及技术要求',
       },
       B3_product_experience: {
-        product_types: Array.isArray(analysis.B3_product_experience?.product_types)
-          ? analysis.B3_product_experience.product_types
-          : [],
+        product_types: toStringArray(analysis.B3_product_experience?.product_types),
         need_full_cycle: analysis.B3_product_experience?.need_full_cycle ?? false,
         need_0to1: analysis.B3_product_experience?.need_0to1 ?? false,
         summary: analysis.B3_product_experience?.summary || 'JD未明确提及产品经验要求',
       },
       B4_capability_requirement: {
-        capabilities: Array.isArray(analysis.B4_capability_requirement?.capabilities)
-          ? analysis.B4_capability_requirement.capabilities
-          : [],
+        capabilities: normalizeCapabilities(analysis.B4_capability_requirement?.capabilities),
         summary: analysis.B4_capability_requirement?.summary || 'JD未明确提及能力要求',
       },
     };

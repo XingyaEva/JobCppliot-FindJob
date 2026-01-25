@@ -686,8 +686,10 @@ app.get('/job/new', (c) => {
               ]);
 
               try {
-                // 调用同步解析API
-                const response = await fetch('/api/job/parse-sync', {
+                // 使用异步模式 + 轮询（避免长连接超时问题）
+                
+                // 1. 创建解析任务
+                const createResponse = await fetch('/api/job/parse-async', {
                   method: 'POST',
                   headers: { 'Content-Type': 'application/json' },
                   body: JSON.stringify({
@@ -698,35 +700,92 @@ app.get('/job/new', (c) => {
                   }),
                 });
 
-                const result = await response.json();
-
-                if (result.success) {
-                  // 更新DAG状态
-                  if (result.dagState) {
-                    renderDAGNodes(result.dagState.nodes);
-                  }
-                  
-                  // 保存评测数据
-                  if (result.metrics && window.JobCopilot && window.JobCopilot.saveMetricsBatch) {
-                    window.JobCopilot.saveMetricsBatch(result.metrics);
-                  }
-                  
-                  // 跳转到详情页
-                  setTimeout(() => {
-                    // 将结果存储到localStorage
-                    const jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
-                    jobs.unshift(result.job);
-                    localStorage.setItem('jobcopilot_jobs', JSON.stringify(jobs));
-                    
-                    // 跳转
-                    window.location.href = '/job/' + result.job.id;
-                  }, 1000);
-                } else {
-                  throw new Error(result.error || '解析失败');
+                const createResult = await createResponse.json();
+                
+                if (!createResult.success) {
+                  throw new Error(createResult.error || '创建解析任务失败');
                 }
+
+                const { taskId, jobId } = createResult;
+                console.log('解析任务已创建:', taskId);
+
+                // 2. 轮询任务状态
+                let pollCount = 0;
+                const maxPolls = 180; // 最多轮询3分钟（每秒1次）
+                
+                const pollTask = async () => {
+                  try {
+                    const statusResponse = await fetch('/api/job/task/' + taskId);
+                    const statusResult = await statusResponse.json();
+                    
+                    if (!statusResult.success) {
+                      throw new Error(statusResult.error || '查询任务状态失败');
+                    }
+                    
+                    const { task } = statusResult;
+                    
+                    // 更新进度显示
+                    const progressNodes = [
+                      { id: 'preprocess', name: 'JD预处理', status: task.progress >= 25 ? 'completed' : (task.progress >= 10 ? 'running' : 'pending') },
+                      { id: 'structure', name: 'JD结构化', status: task.progress >= 50 ? 'completed' : (task.progress >= 25 ? 'running' : 'pending') },
+                      { id: 'analysis-a', name: 'A维度分析', status: task.progress >= 75 ? 'completed' : (task.progress >= 50 ? 'running' : 'pending') },
+                      { id: 'analysis-b', name: 'B维度分析', status: task.progress >= 100 ? 'completed' : (task.progress >= 75 ? 'running' : 'pending') },
+                    ];
+                    renderDAGNodes(progressNodes);
+                    
+                    if (task.status === 'completed' && task.job) {
+                      // 解析完成
+                      renderDAGNodes([
+                        { id: 'preprocess', name: 'JD预处理', status: 'completed' },
+                        { id: 'structure', name: 'JD结构化', status: 'completed' },
+                        { id: 'analysis-a', name: 'A维度分析', status: 'completed' },
+                        { id: 'analysis-b', name: 'B维度分析', status: 'completed' },
+                      ]);
+                      
+                      // 将结果存储到localStorage
+                      const jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+                      jobs.unshift(task.job);
+                      localStorage.setItem('jobcopilot_jobs', JSON.stringify(jobs));
+                      
+                      // 跳转到详情页
+                      setTimeout(() => {
+                        window.location.href = '/job/' + task.job.id;
+                      }, 500);
+                      return;
+                    }
+                    
+                    if (task.status === 'error') {
+                      throw new Error(task.error || '解析失败');
+                    }
+                    
+                    // 继续轮询
+                    pollCount++;
+                    if (pollCount < maxPolls) {
+                      setTimeout(pollTask, 1000); // 每秒轮询一次
+                    } else {
+                      throw new Error('解析超时，请重试');
+                    }
+                  } catch (pollError) {
+                    console.error('轮询失败:', pollError);
+                    throw pollError;
+                  }
+                };
+                
+                // 开始轮询
+                setTimeout(pollTask, 1000);
+                
               } catch (error) {
                 console.error('解析失败:', error);
-                errorMessage.textContent = error.message || '解析失败，请重试';
+                
+                // 区分不同类型的错误
+                let errorText = '解析失败，请重试';
+                if (error.message === 'Failed to fetch') {
+                  errorText = '网络连接失败，请检查网络后重试';
+                } else if (error.message) {
+                  errorText = error.message;
+                }
+                
+                errorMessage.textContent = errorText;
                 errorArea.classList.remove('hidden');
                 progressArea.classList.add('hidden');
                 parseBtn.disabled = false;
@@ -1664,14 +1723,23 @@ app.get('/job/:id', (c) => {
             
             // 关键词列表（从 A/B 维度提取）
             const keywords = [];
+            
+            // 辅助函数：从数组或字符串中提取关键词
+            function extractKeywords(val) {
+              if (!val) return [];
+              if (Array.isArray(val)) return val;
+              if (typeof val === 'string') return val.split(/[,，、]/).map(s => s.trim()).filter(Boolean);
+              return [];
+            }
+            
             if (job.a_analysis?.A1_tech_stack?.keywords) {
-              keywords.push(...job.a_analysis.A1_tech_stack.keywords);
+              keywords.push(...extractKeywords(job.a_analysis.A1_tech_stack.keywords));
             }
             if (job.b_analysis?.B2_tech_requirement?.tech_depth) {
               const depth = job.b_analysis.B2_tech_requirement.tech_depth;
-              if (depth['了解']) keywords.push(...depth['了解']);
-              if (depth['熟悉']) keywords.push(...depth['熟悉']);
-              if (depth['精通']) keywords.push(...depth['精通']);
+              keywords.push(...extractKeywords(depth['了解']));
+              keywords.push(...extractKeywords(depth['熟悉']));
+              keywords.push(...extractKeywords(depth['精通']));
             }
             
             // 高亮关键词（简化版，避免正则转义问题）
@@ -1751,6 +1819,43 @@ app.get('/job/:id', (c) => {
               return div.innerHTML;
             }
 
+            // ==================== 数据处理工具函数 ====================
+            /**
+             * 安全地将值转换为字符串数组
+             * 兼容数组和逗号分隔的字符串
+             */
+            function safeToArray(val) {
+              if (!val) return [];
+              if (Array.isArray(val)) return val;
+              if (typeof val === 'string') return val.split(/[,，、]/).map(function(s) { return s.trim(); }).filter(Boolean);
+              return [];
+            }
+
+            /**
+             * 安全地将数组/字符串转换为显示文本
+             */
+            function safeJoin(val, separator) {
+              separator = separator || ', ';
+              var arr = safeToArray(val);
+              return arr.length > 0 ? arr.join(separator) : null;
+            }
+
+            /**
+             * 标准化能力列表（兼容字符串数组和对象数组）
+             */
+            function normalizeCapabilities(caps) {
+              if (!caps || !Array.isArray(caps)) return [];
+              return caps.map(function(cap) {
+                if (typeof cap === 'string') {
+                  return { name: cap, detail: '' };
+                }
+                if (typeof cap === 'object' && cap !== null) {
+                  return { name: cap.name || '', detail: cap.detail || '' };
+                }
+                return null;
+              }).filter(function(cap) { return cap && cap.name; });
+            }
+
             // 渲染A维度分析
             function renderAAnalysis(a, containerId) {
               if (!a) return;
@@ -1758,8 +1863,11 @@ app.get('/job/:id', (c) => {
               const container = document.getElementById(containerId);
               if (!container) return;
               
+              // 使用 safeJoin 处理 keywords
+              var keywordsText = safeJoin(a.A1_tech_stack?.keywords) || '无';
+              
               container.innerHTML = [
-                renderACard('A1', '技术栈', a.A1_tech_stack?.keywords?.join(', ') || '无', a.A1_tech_stack?.summary, getDensityColor(a.A1_tech_stack?.density)),
+                renderACard('A1', '技术栈', keywordsText, a.A1_tech_stack?.summary, getDensityColor(a.A1_tech_stack?.density)),
                 renderACard('A2', '产品类型', a.A2_product_type?.type || '未知', a.A2_product_type?.reason, 'blue'),
                 renderACard('A3', '业务领域', a.A3_business_domain?.primary || '未知', a.A3_business_domain?.summary, 'green'),
                 renderACard('A4', '团队阶段', a.A4_team_stage?.stage || '未知', a.A4_team_stage?.summary, 'purple'),
@@ -1839,19 +1947,34 @@ app.get('/job/:id', (c) => {
             function renderB2Content(b2) {
               if (!b2) return '<p class="text-gray-500 text-sm">无数据</p>';
               const depth = b2.tech_depth || {};
+              
+              // 兼容数组和字符串两种格式
+              function formatTechList(val) {
+                if (!val) return null;
+                if (Array.isArray(val)) return val.length ? val.join(', ') : null;
+                if (typeof val === 'string') return val.trim() || null;
+                return null;
+              }
+              
+              const liaoJie = formatTechList(depth['了解']);
+              const shuXi = formatTechList(depth['熟悉']);
+              const jingTong = formatTechList(depth['精通']);
+              
               return '<div class="space-y-1.5 text-sm">' +
                 '<p><span class="text-gray-500">学历要求：</span>' + (b2.education || '不限') + '</p>' +
-                (depth['了解']?.length ? '<p><span class="text-gray-500">了解：</span><span class="text-blue-600">' + depth['了解'].join(', ') + '</span></p>' : '') +
-                (depth['熟悉']?.length ? '<p><span class="text-gray-500">熟悉：</span><span class="text-yellow-600">' + depth['熟悉'].join(', ') + '</span></p>' : '') +
-                (depth['精通']?.length ? '<p><span class="text-gray-500">精通：</span><span class="text-red-600">' + depth['精通'].join(', ') + '</span></p>' : '') +
+                (liaoJie ? '<p><span class="text-gray-500">了解：</span><span class="text-blue-600">' + liaoJie + '</span></p>' : '') +
+                (shuXi ? '<p><span class="text-gray-500">熟悉：</span><span class="text-yellow-600">' + shuXi + '</span></p>' : '') +
+                (jingTong ? '<p><span class="text-gray-500">精通：</span><span class="text-red-600">' + jingTong + '</span></p>' : '') +
                 (b2.summary ? '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2 text-xs"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b2.summary + '</p>' : '') +
                 '</div>';
             }
 
             function renderB3Content(b3) {
               if (!b3) return '<p class="text-gray-500 text-sm">无数据</p>';
+              // 使用 safeJoin 兼容数组和字符串格式
+              var productTypesText = safeJoin(b3.product_types) || '不限';
               return '<div class="space-y-1.5 text-sm">' +
-                '<p><span class="text-gray-500">产品类型：</span>' + (b3.product_types?.join(', ') || '不限') + '</p>' +
+                '<p><span class="text-gray-500">产品类型：</span>' + productTypesText + '</p>' +
                 '<p><span class="text-gray-500">全周期经验：</span>' + (b3.need_full_cycle ? '<span class="text-red-500">需要</span>' : '不要求') + '</p>' +
                 '<p><span class="text-gray-500">0-1经验：</span>' + (b3.need_0to1 ? '<span class="text-red-500">需要</span>' : '不要求') + '</p>' +
                 (b3.summary ? '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2 text-xs"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b3.summary + '</p>' : '') +
@@ -1860,9 +1983,26 @@ app.get('/job/:id', (c) => {
 
             function renderB4Content(b4) {
               if (!b4) return '<p class="text-gray-500 text-sm">无数据</p>';
-              const caps = b4.capabilities || [];
+              
+              // 使用 normalizeCapabilities 标准化能力列表
+              var caps = normalizeCapabilities(b4.capabilities);
+              
+              if (caps.length === 0) {
+                return '<p class="text-gray-500 text-sm">无数据</p>';
+              }
+              
+              // 渲染能力列表（统一使用对象格式）
+              var renderCaps = caps.map(function(cap) {
+                if (cap.detail) {
+                  return '<div class="flex gap-1 mb-1"><span class="text-gray-900 font-medium whitespace-nowrap">' + cap.name + '：</span><span class="text-gray-600">' + cap.detail + '</span></div>';
+                } else {
+                  // 如果没有详情，显示为标签样式
+                  return '<div class="inline-block bg-purple-50 text-purple-700 px-2 py-1 rounded text-xs mr-1 mb-1">' + cap.name + '</div>';
+                }
+              }).join('');
+              
               return '<div class="space-y-1.5 text-sm">' +
-                caps.map(cap => '<div class="flex gap-1"><span class="text-gray-900 font-medium whitespace-nowrap">' + cap.name + '：</span><span class="text-gray-600">' + cap.detail + '</span></div>').join('') +
+                '<div class="flex flex-wrap">' + renderCaps + '</div>' +
                 (b4.summary ? '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2 text-xs"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b4.summary + '</p>' : '') +
                 '</div>';
             }

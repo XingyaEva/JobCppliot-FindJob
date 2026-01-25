@@ -25,6 +25,20 @@ const jobRoutes = new Hono();
 // 存储进行中的DAG状态（内存缓存）
 const dagStates = new Map<string, DAGState>();
 
+// 存储异步任务状态
+interface AsyncTask {
+  taskId: string;
+  jobId: string;
+  status: 'pending' | 'processing' | 'completed' | 'error';
+  progress: number;
+  stage: string;
+  job?: Job;
+  error?: string;
+  createdAt: number;
+  updatedAt: number;
+}
+const asyncTasks = new Map<string, AsyncTask>();
+
 /**
  * 创建JD解析DAG并执行
  */
@@ -323,6 +337,171 @@ jobRoutes.post('/parse-sync', async (c) => {
       error: error instanceof Error ? error.message : '未知错误' 
     }, 500);
   }
+});
+
+// ==================== 异步解析 API（推荐使用） ====================
+
+/**
+ * POST /api/job/parse-async - 异步解析JD（立即返回任务ID，前端轮询结果）
+ * 
+ * 优点：避免长连接超时问题
+ */
+jobRoutes.post('/parse-async', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { type, content, imageUrl, jobUrl } = body;
+
+    // 验证输入
+    if (!type || (type !== 'text' && type !== 'image')) {
+      return c.json({ success: false, error: '无效的type参数' }, 400);
+    }
+
+    if (type === 'text' && !content) {
+      return c.json({ success: false, error: '文本模式需要提供content' }, 400);
+    }
+
+    if (type === 'image' && !imageUrl) {
+      return c.json({ success: false, error: '图片模式需要提供imageUrl' }, 400);
+    }
+
+    // 校验岗位链接
+    const urlValidation = validateJobUrl(jobUrl);
+    if (!urlValidation.valid) {
+      return c.json({ success: false, error: urlValidation.error }, 400);
+    }
+
+    const taskId = generateId();
+    const jobId = generateId();
+    
+    // 创建任务记录
+    const task: AsyncTask = {
+      taskId,
+      jobId,
+      status: 'pending',
+      progress: 0,
+      stage: '等待开始',
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    asyncTasks.set(taskId, task);
+
+    console.log(`[API] 异步解析JD，任务ID: ${taskId}, 岗位ID: ${jobId}, 类型: ${type}`);
+
+    // 创建异步执行函数
+    const executeTask = async () => {
+      try {
+        task.status = 'processing';
+        task.stage = 'JD预处理';
+        task.progress = 10;
+        task.updatedAt = Date.now();
+
+        const result = await runJDParseDAG(
+          { type, content, imageUrl },
+          jobId,
+          (state) => {
+            // 更新任务进度
+            const completedNodes = state.nodes.filter(n => n.status === 'completed').length;
+            const totalNodes = state.nodes.length;
+            task.progress = Math.floor((completedNodes / totalNodes) * 90) + 10;
+            const runningNode = state.nodes.find(n => n.status === 'running');
+            task.stage = runningNode?.name || '处理中';
+            task.updatedAt = Date.now();
+          }
+        );
+
+        if (result.success) {
+          // 创建完整的岗位记录
+          const job: Job = {
+            id: jobId,
+            title: result.structuredJD?.title || '未知岗位',
+            company: result.structuredJD?.company || '未知公司',
+            job_url: jobUrl?.trim() || undefined,
+            raw_content: result.cleanedText || content || '',
+            source_type: type,
+            image_url: imageUrl,
+            structured_jd: result.structuredJD,
+            a_analysis: result.aAnalysis,
+            b_analysis: result.bAnalysis,
+            status: 'completed',
+            created_at: now(),
+            updated_at: now(),
+          };
+
+          task.status = 'completed';
+          task.progress = 100;
+          task.stage = '解析完成';
+          task.job = job;
+          task.updatedAt = Date.now();
+          
+          console.log(`[API] 异步解析完成，任务ID: ${taskId}, 岗位: ${job.title}`);
+        } else {
+          task.status = 'error';
+          task.error = result.error;
+          task.stage = '解析失败';
+          task.updatedAt = Date.now();
+          
+          console.error(`[API] 异步解析失败，任务ID: ${taskId}, 错误: ${result.error}`);
+        }
+      } catch (error) {
+        task.status = 'error';
+        task.error = error instanceof Error ? error.message : '未知错误';
+        task.stage = '解析异常';
+        task.updatedAt = Date.now();
+        
+        console.error(`[API] 异步解析异常，任务ID: ${taskId}`, error);
+      }
+    };
+
+    // 使用 waitUntil 确保异步任务在响应后继续执行
+    // 在 Cloudflare Workers 环境中，这是必要的
+    if (c.executionCtx && c.executionCtx.waitUntil) {
+      c.executionCtx.waitUntil(executeTask());
+    } else {
+      // 本地开发模式下，直接执行
+      executeTask();
+    }
+
+    // 立即返回任务ID
+    return c.json({
+      success: true,
+      taskId,
+      jobId,
+      message: '解析任务已创建，请轮询 /api/job/task/:taskId 获取结果',
+    });
+  } catch (error) {
+    console.error('[API] 创建解析任务失败:', error);
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : '未知错误' 
+    }, 500);
+  }
+});
+
+/**
+ * GET /api/job/task/:taskId - 查询异步任务状态
+ */
+jobRoutes.get('/task/:taskId', async (c) => {
+  const taskId = c.req.param('taskId');
+  const task = asyncTasks.get(taskId);
+
+  if (!task) {
+    return c.json({ success: false, error: '任务不存在' }, 404);
+  }
+
+  // 返回任务状态
+  return c.json({
+    success: true,
+    task: {
+      taskId: task.taskId,
+      jobId: task.jobId,
+      status: task.status,
+      progress: task.progress,
+      stage: task.stage,
+      error: task.error,
+      job: task.job, // 完成时返回岗位数据
+      elapsed: Math.floor((Date.now() - task.createdAt) / 1000),
+    },
+  });
 });
 
 // ============ 静态路由（必须放在动态路由之前） ============

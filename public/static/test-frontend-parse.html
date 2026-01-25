@@ -1,0 +1,282 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>前端 PDF 解析测试</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-8">
+        <h1 class="text-2xl font-bold mb-2">🚀 前端 PDF 解析测试</h1>
+        <p class="text-gray-500 text-sm mb-6">使用 pdf.js 在浏览器端提取文本，无需后端 Python 服务，秒级响应</p>
+        
+        <div class="mb-6">
+            <label class="block text-sm font-medium mb-2">选择 PDF 文件</label>
+            <input type="file" id="fileInput" accept=".pdf" 
+                   class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4
+                          file:rounded-lg file:border-0 file:text-sm file:font-semibold
+                          file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"/>
+        </div>
+        
+        <div class="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm">
+            <p class="font-medium text-yellow-800 mb-1">💡 新方案说明</p>
+            <ul class="text-yellow-700 list-disc list-inside space-y-1">
+                <li><strong>数字 PDF</strong> → 前端 pdf.js 提取（1-2 秒）</li>
+                <li><strong>扫描件 PDF</strong> → 自动降级到 MinerU OCR（45-60 秒）</li>
+                <li>无需 Python 服务，无冷启动问题！</li>
+            </ul>
+        </div>
+        
+        <button id="uploadBtn" 
+                class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-medium hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+            开始解析
+        </button>
+        
+        <!-- 进度显示 -->
+        <div id="progress" class="hidden mt-6">
+            <div class="bg-blue-50 rounded-lg p-4">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    <div>
+                        <p class="font-medium text-gray-900">正在解析...</p>
+                        <p id="progressMsg" class="text-sm text-gray-500">准备中...</p>
+                    </div>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all" style="width: 0%"></div>
+                </div>
+                <p id="progressPercent" class="text-right text-sm text-gray-600 mt-1">0%</p>
+            </div>
+        </div>
+        
+        <!-- 提取文本预览 -->
+        <div id="textPreview" class="hidden mt-6">
+            <div class="bg-gray-50 rounded-lg p-4">
+                <div class="flex justify-between items-center mb-2">
+                    <h3 class="font-medium text-gray-700">📄 提取的文本预览</h3>
+                    <span id="textStats" class="text-xs text-gray-500"></span>
+                </div>
+                <div id="textContent" class="text-sm text-gray-600 max-h-40 overflow-y-auto bg-white p-3 rounded border font-mono whitespace-pre-wrap"></div>
+            </div>
+        </div>
+        
+        <!-- 结果显示 -->
+        <div id="result" class="hidden mt-6">
+            <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                <h3 class="font-medium text-green-900 mb-2">✅ 解析成功！</h3>
+                <div id="resultContent" class="text-sm text-gray-700"></div>
+                <button onclick="location.reload()" class="mt-4 text-blue-600 hover:text-blue-700 text-sm">
+                    再次测试
+                </button>
+            </div>
+        </div>
+        
+        <!-- 错误显示 -->
+        <div id="error" class="hidden mt-6">
+            <div class="bg-red-50 border border-red-200 rounded-lg p-4">
+                <h3 class="font-medium text-red-900 mb-2">❌ 解析失败</h3>
+                <p id="errorMsg" class="text-sm text-red-700"></p>
+                <button onclick="location.reload()" class="mt-4 text-blue-600 hover:text-blue-700 text-sm">
+                    重试
+                </button>
+            </div>
+        </div>
+        
+        <!-- 性能对比 -->
+        <div id="perfComparison" class="hidden mt-6 p-4 bg-purple-50 rounded-lg text-sm">
+            <p class="font-medium text-purple-800 mb-2">⚡ 性能对比</p>
+            <div id="perfStats" class="text-purple-700"></div>
+        </div>
+    </div>
+    
+    <!-- 加载 PDF 提取模块 -->
+    <script src="/static/pdf-extractor.js"></script>
+    
+    <script>
+        const fileInput = document.getElementById('fileInput');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const progress = document.getElementById('progress');
+        const progressBar = document.getElementById('progressBar');
+        const progressPercent = document.getElementById('progressPercent');
+        const progressMsg = document.getElementById('progressMsg');
+        const textPreview = document.getElementById('textPreview');
+        const textContent = document.getElementById('textContent');
+        const textStats = document.getElementById('textStats');
+        const result = document.getElementById('result');
+        const resultContent = document.getElementById('resultContent');
+        const error = document.getElementById('error');
+        const errorMsg = document.getElementById('errorMsg');
+        const perfComparison = document.getElementById('perfComparison');
+        const perfStats = document.getElementById('perfStats');
+        
+        function updateProgress(percent, msg) {
+            progressBar.style.width = percent + '%';
+            progressPercent.textContent = percent + '%';
+            progressMsg.textContent = msg;
+        }
+        
+        uploadBtn.addEventListener('click', async () => {
+            const file = fileInput.files[0];
+            if (!file) {
+                alert('请选择文件');
+                return;
+            }
+            
+            // 重置UI
+            progress.classList.remove('hidden');
+            textPreview.classList.add('hidden');
+            result.classList.add('hidden');
+            error.classList.add('hidden');
+            perfComparison.classList.add('hidden');
+            uploadBtn.disabled = true;
+            
+            const totalStartTime = Date.now();
+            let extractTime = 0;
+            let structureTime = 0;
+            let parseMethod = 'pdf.js';
+            
+            try {
+                // Step 1: 前端提取 PDF 文本
+                updateProgress(10, '正在加载 PDF.js...');
+                
+                const extractStartTime = Date.now();
+                updateProgress(20, '正在提取 PDF 文本...');
+                
+                const extractResult = await window.PDFExtractor.extractTextFromPDF(file);
+                extractTime = Date.now() - extractStartTime;
+                
+                if (!extractResult.success) {
+                    throw new Error(extractResult.error || '文本提取失败');
+                }
+                
+                // 检查是否为扫描件
+                if (extractResult.isScanned) {
+                    updateProgress(30, '检测到扫描件，正在调用 MinerU OCR...');
+                    parseMethod = 'mineru';
+                    
+                    // 降级到 MinerU
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('forceMineru', 'true');
+                    
+                    const mineruResponse = await fetch('/api/resume/upload-smart', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const mineruData = await mineruResponse.json();
+                    
+                    if (!mineruData.success) {
+                        throw new Error(mineruData.error || 'MinerU 解析失败');
+                    }
+                    
+                    // MinerU 成功
+                    const totalTime = Date.now() - totalStartTime;
+                    showSuccess(mineruData, totalTime, 'mineru', extractTime, totalTime - extractTime);
+                    return;
+                }
+                
+                // 显示提取的文本预览
+                updateProgress(50, '文本提取完成，准备结构化...');
+                textPreview.classList.remove('hidden');
+                textContent.textContent = extractResult.text.substring(0, 500) + (extractResult.text.length > 500 ? '...' : '');
+                textStats.textContent = `${extractResult.pages} 页 | ${extractResult.totalChars} 字符 | ${extractResult.duration_ms}ms`;
+                
+                // Step 2: 发送文本到后端进行 LLM 结构化
+                updateProgress(60, '正在进行 AI 结构化分析...');
+                const structureStartTime = Date.now();
+                
+                const response = await fetch('/api/resume/parse-text', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: extractResult.text,
+                        fileName: file.name,
+                        parseMethod: 'pdf.js',
+                        extractInfo: {
+                            pages: extractResult.pages,
+                            totalChars: extractResult.totalChars,
+                            duration_ms: extractResult.duration_ms
+                        }
+                    })
+                });
+                
+                const data = await response.json();
+                structureTime = Date.now() - structureStartTime;
+                
+                if (!data.success) {
+                    throw new Error(data.error || '结构化分析失败');
+                }
+                
+                // 成功
+                const totalTime = Date.now() - totalStartTime;
+                showSuccess(data, totalTime, 'pdf.js', extractTime, structureTime);
+                
+            } catch (err) {
+                progress.classList.add('hidden');
+                error.classList.remove('hidden');
+                errorMsg.textContent = err.message;
+            } finally {
+                uploadBtn.disabled = false;
+            }
+        });
+        
+        // 保存简历到 localStorage（解决前后端存储不同步问题）
+        function saveResumeToLocalStorage(resume) {
+            const STORAGE_KEY = 'jobcopilot_resumes';
+            try {
+                const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+                // 检查是否已存在（避免重复）
+                const existingIndex = existing.findIndex(r => r.id === resume.id);
+                if (existingIndex >= 0) {
+                    existing[existingIndex] = resume;
+                } else {
+                    existing.unshift(resume); // 新简历放在最前面
+                }
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+                console.log('[Storage] 简历已保存到 localStorage:', resume.id);
+                return true;
+            } catch (err) {
+                console.error('[Storage] 保存失败:', err);
+                return false;
+            }
+        }
+        
+        function showSuccess(data, totalTime, method, extractTime, structureTime) {
+            updateProgress(100, '解析完成！');
+            
+            // 🔑 关键：将 API 返回的简历保存到前端 localStorage
+            if (data.resume) {
+                saveResumeToLocalStorage(data.resume);
+            }
+            
+            setTimeout(() => {
+                progress.classList.add('hidden');
+                result.classList.remove('hidden');
+                
+                resultContent.innerHTML = `
+                    <p><strong>姓名:</strong> ${data.resume?.basic_info?.name || '未知'}</p>
+                    <p><strong>联系方式:</strong> ${data.resume?.basic_info?.contact || '未知'}</p>
+                    <p><strong>求职意向:</strong> ${data.resume?.basic_info?.target_position || '未指定'}</p>
+                    <p class="mt-2"><strong>解析方法:</strong> ${method === 'pdf.js' ? '🚀 前端 pdf.js' : '🔍 MinerU OCR'}</p>
+                    <p><strong>简历ID:</strong> ${data.resumeId}</p>
+                    <p class="text-green-600 text-xs mt-1">✅ 已保存到简历库</p>
+                    <a href="/resume/${data.resumeId}" class="inline-block mt-3 text-blue-600 hover:underline">
+                        查看详情 →
+                    </a>
+                `;
+                
+                // 显示性能对比
+                perfComparison.classList.remove('hidden');
+                perfStats.innerHTML = `
+                    <p><strong>总耗时:</strong> ${(totalTime / 1000).toFixed(2)} 秒</p>
+                    <p><strong>文本提取:</strong> ${(extractTime / 1000).toFixed(2)} 秒 ${method === 'pdf.js' ? '(前端)' : ''}</p>
+                    <p><strong>AI 结构化:</strong> ${(structureTime / 1000).toFixed(2)} 秒 (后端)</p>
+                    <p class="mt-2 text-green-700"><strong>对比旧方案:</strong> ${method === 'pdf.js' ? '节省 Python 服务调用，无冷启动延迟！' : '扫描件需要 OCR 处理'}</p>
+                `;
+            }, 300);
+        }
+    </script>
+</body>
+</html>

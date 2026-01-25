@@ -750,6 +750,87 @@ resumeRoutes.post('/parse', async (c) => {
   }
 });
 
+// ==================== 新增：前端文本解析 API ====================
+
+/**
+ * POST /api/resume/parse-text - 接收前端提取的纯文本进行结构化
+ * 
+ * 新方案：前端使用 pdf.js 提取文本，后端只做 LLM 结构化
+ * 优点：
+ * - 无需 Python 服务，无冷启动问题
+ * - 秒级响应（文本提取在前端完成）
+ * - 架构更简单，维护成本低
+ */
+resumeRoutes.post('/parse-text', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { text, fileName, parseMethod, extractInfo } = body;
+
+    // 验证输入
+    if (!text || typeof text !== 'string') {
+      return c.json({ success: false, error: '缺少文本内容' }, 400);
+    }
+
+    if (text.length < 50) {
+      return c.json({ success: false, error: '文本内容过短，请确保上传了有效的简历文件' }, 400);
+    }
+
+    console.log(`[API] 前端文本解析，方法: ${parseMethod}, 文本长度: ${text.length}`);
+
+    // 从文件名提取可能的姓名
+    let possibleName = '';
+    if (fileName) {
+      const fileNameWithoutExt = fileName.replace(/\.[^/.]+$/, '');
+      possibleName = fileNameWithoutExt.split(/[_\-\s]+/)[0];
+      console.log(`[API] 文件名提取的可能姓名: ${possibleName}`);
+    }
+
+    // 直接调用 LLM 结构化（跳过预处理，因为前端已提取文本）
+    const parseResult = await executeResumeParse({ 
+      cleanedText: text,
+      fileName: possibleName
+    });
+
+    if (!parseResult.success) {
+      return c.json({ success: false, error: parseResult.error }, 500);
+    }
+
+    // 创建简历记录并保存到存储
+    const resume = resumeStorage.create({
+      name: parseResult.data!.basic_info?.name || '未命名简历',
+      original_file_name: fileName || undefined,
+      basic_info: parseResult.data!.basic_info,
+      education: parseResult.data!.education,
+      work_experience: parseResult.data!.work_experience,
+      projects: parseResult.data!.projects,
+      skills: parseResult.data!.skills,
+      ability_tags: parseResult.data!.ability_tags,
+      raw_content: text,
+      version: 1,
+      version_tag: '基础版',
+      linked_jd_ids: [],
+      is_master: true,
+      status: 'completed',
+    });
+
+    console.log(`[API] 前端文本解析完成，ID: ${resume.id}, 姓名: ${resume.name}`);
+
+    return c.json({
+      success: true,
+      resumeId: resume.id,
+      resume,
+      parseMethod: parseMethod || 'pdf.js',
+      extractInfo, // 返回前端提取的信息
+    });
+  } catch (error) {
+    console.error('[API] 前端文本解析失败:', error);
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : '未知错误',
+    }, 500);
+  }
+});
+
 /**
  * GET /api/resume - 获取当前简历
  */
