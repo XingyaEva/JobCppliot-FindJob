@@ -1527,7 +1527,7 @@ app.get('/settings/feishu', (c) => {
             const enabled = document.getElementById('feishu-enabled').checked;
 
             if (!appId || !appSecret || !appToken || !tableId) {
-              if (typeof JobCopilot !== 'undefined') JobCopilot.toast('请填写完整配置信息', 'error');
+              if (typeof JobCopilot !== 'undefined' && JobCopilot.showToast) JobCopilot.showToast('请填写完整配置信息', 'error');
               return;
             }
 
@@ -1548,7 +1548,7 @@ app.get('/settings/feishu', (c) => {
             const data = await resp.json();
 
             if (data.success) {
-              if (typeof JobCopilot !== 'undefined') JobCopilot.toast('飞书配置已保存', 'success');
+              if (typeof JobCopilot !== 'undefined' && JobCopilot.showToast) JobCopilot.showToast('飞书配置已保存', 'success');
               document.getElementById('sync-status').innerHTML = enabled
                 ? '<i class="fas fa-circle text-green-400 mr-1"></i>已配置'
                 : '<i class="fas fa-circle text-yellow-400 mr-1"></i>已暂停';
@@ -1556,7 +1556,7 @@ app.get('/settings/feishu', (c) => {
               throw new Error(data.error);
             }
           } catch (e) {
-            if (typeof JobCopilot !== 'undefined') JobCopilot.toast('保存失败: ' + e.message, 'error');
+            if (typeof JobCopilot !== 'undefined' && JobCopilot.showToast) JobCopilot.showToast('保存失败: ' + e.message, 'error');
           } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-save mr-1.5"></i>保存配置';
