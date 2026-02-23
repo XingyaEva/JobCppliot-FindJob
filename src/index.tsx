@@ -36,197 +36,195 @@ app.use('*', async (c, next) => {
 // 首页
 app.get('/', (c) => {
   return c.render(
-    <div class="min-h-screen bg-white flex flex-col">
-      {/* 统一导航栏 */}
-      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
-        <div class="max-w-6xl mx-auto px-4">
-          <div class="flex items-center justify-between h-14">
-            <a href="/" class="flex items-center gap-2 font-bold text-lg">
-              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
-                <i class="fas fa-robot"></i>
+    <div class="animate-apple-fade">
+      {/* ===== Hero Section ===== */}
+      <div class="px-8 pt-10 pb-6">
+        <div class="max-w-4xl">
+          <h1 class="text-[34px] font-bold tracking-tight text-primary leading-[1.12] mb-2">
+            你好
+          </h1>
+          <p class="text-[17px] text-secondary leading-relaxed" id="home-greeting">
+            开始你的智能求职之旅
+          </p>
+        </div>
+      </div>
+
+      {/* ===== Stats Overview ===== */}
+      <div class="px-8 pb-8">
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" id="stats-grid">
+          {/* Stat Card: 岗位 */}
+          <div class="glass-card rounded-[16px] p-5 card-hover">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="w-9 h-9 rounded-[10px] bg-blue-500/10 flex items-center justify-center">
+                <i class="fas fa-briefcase text-blue-500 text-sm"></i>
               </span>
-              <span class="hidden sm:inline">Job Copilot</span>
-            </a>
-            <nav class="flex items-center gap-1">
-              <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-900">
-                <i class="fas fa-home mr-1.5"></i><span class="hidden sm:inline">首页</span>
-              </a>
-              <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
-              </a>
-              <a href="/resumes" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                <i class="fas fa-folder-open mr-1.5"></i><span class="hidden sm:inline">简历库</span>
-              </a>
-              <a href="/questions" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                <i class="fas fa-question-circle mr-1.5"></i><span class="hidden sm:inline">题库</span>
-              </a>
-              <a href="/applications" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                <i class="fas fa-paper-plane mr-1.5"></i><span class="hidden sm:inline">投递</span>
-              </a>
-              <a href="/metrics" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                <i class="fas fa-chart-bar mr-1.5"></i><span class="hidden sm:inline">评测</span>
-              </a>
-            </nav>
-            <div class="flex items-center gap-2">
-              <span id="resume-status-nav" class="hidden sm:flex text-xs text-gray-500 items-center">
-                <i class="fas fa-user-circle mr-1"></i>未上传简历
-              </span>
-              <a href="/job/new" class="px-3 py-1.5 bg-black text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
-                <i class="fas fa-plus mr-1"></i><span class="hidden sm:inline">新建</span>
-              </a>
+              <span class="text-[13px] font-medium text-secondary">已解析岗位</span>
             </div>
+            <div class="text-[28px] font-bold text-primary tracking-tight leading-none" id="stat-jobs">0</div>
+          </div>
+          {/* Stat Card: 简历 */}
+          <div class="glass-card rounded-[16px] p-5 card-hover">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="w-9 h-9 rounded-[10px] bg-emerald-500/10 flex items-center justify-center">
+                <i class="fas fa-file-alt text-emerald-500 text-sm"></i>
+              </span>
+              <span class="text-[13px] font-medium text-secondary">我的简历</span>
+            </div>
+            <div class="text-[28px] font-bold text-primary tracking-tight leading-none" id="stat-resumes">0</div>
+          </div>
+          {/* Stat Card: 面试 */}
+          <div class="glass-card rounded-[16px] p-5 card-hover">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="w-9 h-9 rounded-[10px] bg-purple-500/10 flex items-center justify-center">
+                <i class="fas fa-comments text-purple-500 text-sm"></i>
+              </span>
+              <span class="text-[13px] font-medium text-secondary">面试准备</span>
+            </div>
+            <div class="text-[28px] font-bold text-primary tracking-tight leading-none" id="stat-interviews">0</div>
+          </div>
+          {/* Stat Card: 投递 */}
+          <div class="glass-card rounded-[16px] p-5 card-hover">
+            <div class="flex items-center gap-3 mb-3">
+              <span class="w-9 h-9 rounded-[10px] bg-amber-500/10 flex items-center justify-center">
+                <i class="fas fa-paper-plane text-amber-500 text-sm"></i>
+              </span>
+              <span class="text-[13px] font-medium text-secondary">已投递</span>
+            </div>
+            <div class="text-[28px] font-bold text-primary tracking-tight leading-none" id="stat-applications">0</div>
           </div>
         </div>
-      </header>
+      </div>
 
-      {/* 主内容区 */}
-      <main class="flex-1 max-w-6xl mx-auto px-4 py-8 w-full">
-        {/* 使用指南 */}
-        <div id="guide-section" class="mb-8">
-          <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-6">
-            <h2 class="text-lg font-semibold mb-4">
-              <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
-              使用流程
-            </h2>
-            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-4 sm:gap-2">
-              <div class="flex items-center gap-2">
-                <div id="step-1" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">1</div>
-                <span class="text-sm text-gray-600">解析岗位</span>
-              </div>
-              <div class="hidden sm:block w-8 h-0.5 bg-gray-200"></div>
-              <div class="flex items-center gap-2">
-                <div id="step-2" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">2</div>
-                <span class="text-sm text-gray-600">上传简历</span>
-              </div>
-              <div class="hidden sm:block w-8 h-0.5 bg-gray-200"></div>
-              <div class="flex items-center gap-2">
-                <div id="step-3" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">3</div>
-                <span class="text-sm text-gray-600">匹配评估</span>
-              </div>
-              <div class="hidden sm:block w-8 h-0.5 bg-gray-200"></div>
-              <div class="flex items-center gap-2">
-                <div id="step-4" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">4</div>
-                <span class="text-sm text-gray-600">优化简历</span>
-              </div>
-              <div class="hidden sm:block w-8 h-0.5 bg-gray-200"></div>
-              <div class="flex items-center gap-2">
-                <div id="step-5" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">5</div>
-                <span class="text-sm text-gray-600">面试准备</span>
-              </div>
+      {/* ===== Quick Actions ===== */}
+      <div class="px-8 pb-8">
+        <h2 class="text-[13px] font-semibold text-secondary uppercase tracking-wider mb-4">快速开始</h2>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {/* Action: 解析岗位 */}
+          <a href="/job/new" class="group glass-card rounded-[16px] p-5 card-hover flex items-center gap-4 no-underline">
+            <span class="w-11 h-11 rounded-[12px] bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <i class="fas fa-wand-magic-sparkles text-white text-[15px]"></i>
+            </span>
+            <div class="min-w-0">
+              <div class="text-[15px] font-semibold text-primary group-hover:text-accent transition-colors">解析岗位</div>
+              <div class="text-[12px] text-secondary mt-0.5">粘贴JD文本或上传截图</div>
             </div>
-          </div>
+          </a>
+          {/* Action: 上传简历 */}
+          <a href="/resume" class="group glass-card rounded-[16px] p-5 card-hover flex items-center gap-4 no-underline">
+            <span class="w-11 h-11 rounded-[12px] bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <i class="fas fa-cloud-arrow-up text-white text-[15px]"></i>
+            </span>
+            <div class="min-w-0">
+              <div class="text-[15px] font-semibold text-primary group-hover:text-accent transition-colors">上传简历</div>
+              <div class="text-[12px] text-secondary mt-0.5">解析并管理你的简历</div>
+            </div>
+          </a>
+          {/* Action: 面试准备 */}
+          <a href="/questions" class="group glass-card rounded-[16px] p-5 card-hover flex items-center gap-4 no-underline">
+            <span class="w-11 h-11 rounded-[12px] bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+              <i class="fas fa-graduation-cap text-white text-[15px]"></i>
+            </span>
+            <div class="min-w-0">
+              <div class="text-[15px] font-semibold text-primary group-hover:text-accent transition-colors">面试准备</div>
+              <div class="text-[12px] text-secondary mt-0.5">题库、辅导和模拟面试</div>
+            </div>
+          </a>
         </div>
+      </div>
 
-        {/* 快速入口 */}
-        <div class="mb-8">
-          <a 
-            href="/job/new" 
-            class="block w-full max-w-xl mx-auto p-8 border-2 border-dashed border-gray-200 rounded-xl text-center hover:border-blue-400 hover:bg-blue-50 transition-all card-hover"
-          >
-            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <i class="fas fa-plus text-2xl text-blue-500"></i>
-            </div>
-            <h2 class="text-xl font-semibold mb-2">新建岗位解析</h2>
-            <p class="text-gray-500">上传 JD 截图 或 粘贴岗位描述</p>
+      {/* ===== Recent Jobs Section ===== */}
+      <div class="px-8 pb-10">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-[13px] font-semibold text-secondary uppercase tracking-wider">最近解析</h2>
+          <a href="/jobs" class="text-[13px] font-medium text-accent hover:text-accent-hover transition-colors flex items-center gap-1">
+            查看全部 <i class="fas fa-arrow-right text-[10px]"></i>
           </a>
         </div>
 
-        {/* 最近解析的岗位 */}
-        <div>
-          <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-semibold">最近解析的岗位</h2>
-            <a href="/jobs" class="text-sm text-blue-500 hover:text-blue-600">
-              查看全部 <i class="fas fa-arrow-right ml-1"></i>
-            </a>
-          </div>
-
-          <div id="recent-jobs" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {/* 骨架屏 */}
-            <div class="p-4 border border-gray-200 rounded-xl">
-              <div class="skeleton h-5 w-3/4 mb-3"></div>
-              <div class="skeleton h-4 w-1/2 mb-4"></div>
-              <div class="flex gap-2">
-                <div class="skeleton h-6 w-16 rounded-full"></div>
-                <div class="skeleton h-6 w-20 rounded-full"></div>
-              </div>
+        <div id="recent-jobs" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+          {/* Skeleton */}
+          <div class="glass-card rounded-[16px] p-5">
+            <div class="skeleton h-5 w-3/4 mb-3"></div>
+            <div class="skeleton h-4 w-1/2 mb-4"></div>
+            <div class="flex gap-2">
+              <div class="skeleton h-[22px] w-16 rounded-full"></div>
+              <div class="skeleton h-[22px] w-20 rounded-full"></div>
             </div>
           </div>
         </div>
-      </main>
+      </div>
 
-      {/* 页脚 */}
-      <footer class="border-t border-gray-100 mt-auto">
-        <div class="max-w-6xl mx-auto px-4 py-6">
-          <div class="flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-gray-400">
-            <div class="flex items-center gap-4">
-              <span>Job Copilot v1.0.0</span>
-              <span class="hidden sm:inline">|</span>
-              <span class="hidden sm:inline">Phase 9 - 投递跟踪</span>
-            </div>
-            <div class="flex items-center gap-4">
-              <button onclick="JobCopilot.exportData()" class="hover:text-gray-600 transition-colors">
-                <i class="fas fa-download mr-1"></i>导出数据
-              </button>
-              <button onclick="JobCopilot.clearData()" class="hover:text-red-500 transition-colors">
-                <i class="fas fa-trash-alt mr-1"></i>清空数据
-              </button>
-            </div>
+      {/* ===== Footer ===== */}
+      <div class="px-8 py-5 border-t border-black/[0.04]">
+        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-[12px] text-secondary/60">
+          <div class="flex items-center gap-3">
+            <span>Job Copilot v2.0</span>
+            <span class="w-px h-3 bg-black/10"></span>
+            <span>AI 驱动的智能求职助手</span>
+          </div>
+          <div class="flex items-center gap-4">
+            <button onclick="JobCopilot.exportData()" class="hover:text-primary/60 transition-colors flex items-center gap-1">
+              <i class="fas fa-arrow-down-to-bracket text-[10px]"></i>导出
+            </button>
+            <button onclick="JobCopilot.clearData()" class="hover:text-error transition-colors flex items-center gap-1">
+              <i class="fas fa-trash-can text-[10px]"></i>清空
+            </button>
           </div>
         </div>
-      </footer>
+      </div>
 
-      {/* 页面脚本 */}
+      {/* ===== Homepage Script ===== */}
       <script dangerouslySetInnerHTML={{
         __html: `
           document.addEventListener('DOMContentLoaded', function() {
-            // 加载最近岗位
             var jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
-            var recentJobs = document.getElementById('recent-jobs');
             var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
-            
-            // 更新简历状态
-            var resumeNav = document.getElementById('resume-status-nav');
-            if (resumeNav && resumes.length > 0) {
-              resumeNav.innerHTML = '<i class="fas fa-check-circle text-green-500 mr-1"></i>' + 
-                (resumes[0].basic_info?.name || '已上传');
-            }
-            
-            // 更新步骤指引
-            if (jobs.length > 0) {
-              document.getElementById('step-1').className = 'w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-medium';
-              document.getElementById('step-1').innerHTML = '<i class="fas fa-check"></i>';
-            }
-            if (resumes.length > 0) {
-              document.getElementById('step-2').className = 'w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center text-sm font-medium';
-              document.getElementById('step-2').innerHTML = '<i class="fas fa-check"></i>';
-            }
-            
-            // 渲染岗位列表
+            var interviews = JSON.parse(localStorage.getItem('jobcopilot_interviews') || '[]');
+            var applications = JSON.parse(localStorage.getItem('jobcopilot_applications') || '[]');
+            var recentJobs = document.getElementById('recent-jobs');
+
+            // Greeting
+            var hour = new Date().getHours();
+            var greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
+            var el = document.getElementById('home-greeting');
+            if (el) el.textContent = greeting + '，准备好开启今天的求职之旅了吗？';
+
+            // Stats
+            var statJobs = document.getElementById('stat-jobs');
+            var statResumes = document.getElementById('stat-resumes');
+            var statInterviews = document.getElementById('stat-interviews');
+            var statApplications = document.getElementById('stat-applications');
+            if (statJobs) statJobs.textContent = jobs.length;
+            if (statResumes) statResumes.textContent = resumes.length;
+            if (statInterviews) statInterviews.textContent = interviews.length;
+            if (statApplications) statApplications.textContent = applications.length;
+
+            // Recent jobs
             if (jobs.length === 0) {
-              recentJobs.innerHTML = '<div class="col-span-full p-8 bg-gray-50 rounded-xl text-center text-gray-400">' +
-                '<i class="fas fa-inbox text-3xl mb-3"></i>' +
-                '<p>暂无解析记录</p>' +
-                '<p class="text-sm mt-1">点击上方按钮开始解析岗位</p>' +
+              recentJobs.innerHTML = '<div class="col-span-full glass-card rounded-[16px] p-10 text-center">' +
+                '<div class="w-14 h-14 rounded-full bg-black/[0.03] flex items-center justify-center mx-auto mb-4">' +
+                '<i class="fas fa-inbox text-xl text-secondary/40"></i></div>' +
+                '<p class="text-[15px] font-medium text-primary/50 mb-1">暂无解析记录</p>' +
+                '<p class="text-[13px] text-secondary/50">点击「解析岗位」开始你的第一次分析</p>' +
                 '</div>';
               return;
             }
-            
+
             recentJobs.innerHTML = jobs.slice(0, 6).map(function(job) {
-              var statusColor = job.status === 'completed' ? 'green' : (job.status === 'error' ? 'red' : 'yellow');
-              return '<div class="p-4 border border-gray-200 rounded-xl hover:shadow-md transition-shadow card-hover">' +
+              return '<div class="glass-card rounded-[16px] p-5 card-hover group">' +
                 '<div class="flex items-start justify-between mb-2">' +
-                '<a href="/job/' + job.id + '" class="font-semibold text-gray-900 hover:text-blue-600">' + job.title + '</a>' +
-                '<button onclick="event.stopPropagation();JobCopilot.deleteJob(\\'' + job.id + '\\')" class="text-gray-400 hover:text-red-500 p-1" title="删除">' +
-                '<i class="fas fa-trash-alt text-xs"></i></button>' +
+                '<a href="/job/' + job.id + '" class="text-[15px] font-semibold text-primary hover:text-accent transition-colors leading-snug">' + (job.title || '未命名岗位') + '</a>' +
+                '<button onclick="event.stopPropagation();JobCopilot.deleteJob(\\'' + job.id + '\\')" class="text-secondary/30 hover:text-error p-1 opacity-0 group-hover:opacity-100 transition-all" title="删除">' +
+                '<i class="fas fa-trash-can text-[11px]"></i></button>' +
                 '</div>' +
-                '<p class="text-sm text-gray-500 mb-3">' + job.company + '</p>' +
-                '<div class="flex flex-wrap gap-2 mb-3">' +
-                (job.a_analysis?.A2_product_type?.type ? '<span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded-full">' + job.a_analysis.A2_product_type.type + '</span>' : '') +
-                (job.a_analysis?.A3_business_domain?.primary ? '<span class="text-xs px-2 py-0.5 bg-green-100 text-green-600 rounded-full">' + job.a_analysis.A3_business_domain.primary + '</span>' : '') +
+                '<p class="text-[13px] text-secondary mb-3">' + (job.company || '') + '</p>' +
+                '<div class="flex flex-wrap gap-1.5 mb-3">' +
+                (job.a_analysis && job.a_analysis.A2_product_type && job.a_analysis.A2_product_type.type ? '<span class="text-[11px] px-2 py-0.5 bg-blue-500/8 text-blue-600 rounded-full font-medium">' + job.a_analysis.A2_product_type.type + '</span>' : '') +
+                (job.a_analysis && job.a_analysis.A3_business_domain && job.a_analysis.A3_business_domain.primary ? '<span class="text-[11px] px-2 py-0.5 bg-emerald-500/8 text-emerald-600 rounded-full font-medium">' + job.a_analysis.A3_business_domain.primary + '</span>' : '') +
                 '</div>' +
-                '<div class="flex items-center justify-between text-xs text-gray-400">' +
+                '<div class="flex items-center justify-between text-[12px] text-secondary/50">' +
                 '<span>' + new Date(job.created_at).toLocaleDateString() + '</span>' +
-                '<a href="/job/' + job.id + '/match" class="text-blue-500 hover:text-blue-600">匹配分析 →</a>' +
+                '<a href="/job/' + job.id + '/match" class="text-accent hover:text-accent-hover font-medium transition-colors">匹配分析 <i class="fas fa-arrow-right text-[9px] ml-0.5"></i></a>' +
                 '</div>' +
                 '</div>';
             }).join('');
