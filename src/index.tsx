@@ -97,12 +97,12 @@ app.get('/', (c) => {
               <div class="hidden sm:block w-8 h-0.5 bg-gray-200"></div>
               <div class="flex items-center gap-2">
                 <div id="step-4" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">4</div>
-                <span class="text-sm text-gray-600">面试准备</span>
+                <span class="text-sm text-gray-600">优化简历</span>
               </div>
               <div class="hidden sm:block w-8 h-0.5 bg-gray-200"></div>
               <div class="flex items-center gap-2">
                 <div id="step-5" class="w-8 h-8 rounded-full bg-gray-200 text-gray-500 flex items-center justify-center text-sm font-medium">5</div>
-                <span class="text-sm text-gray-600">优化简历</span>
+                <span class="text-sm text-gray-600">面试准备</span>
               </div>
             </div>
           </div>
@@ -1223,11 +1223,11 @@ app.get('/job/:id', (c) => {
               <button id="action-targeted-resume" class="px-3 py-1.5 text-sm bg-orange-500 text-white rounded-lg hover:bg-orange-600">
                 <i class="fas fa-file-export mr-1"></i><span class="hidden sm:inline">定向简历</span>
               </button>
-              <a id="action-interview" href="#" class="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600">
-                <i class="fas fa-comments mr-1"></i><span class="hidden sm:inline">面试</span>
-              </a>
               <a id="action-optimize" href="#" class="px-3 py-1.5 text-sm bg-green-500 text-white rounded-lg hover:bg-green-600">
                 <i class="fas fa-magic mr-1"></i><span class="hidden sm:inline">优化</span>
+              </a>
+              <a id="action-interview" href="#" class="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600">
+                <i class="fas fa-comments mr-1"></i><span class="hidden sm:inline">面试</span>
               </a>
             </div>
           </div>
@@ -2179,8 +2179,8 @@ app.get('/jobs', (c) => {
                 '<span class="text-gray-400">' + new Date(job.created_at).toLocaleDateString() + '</span>' +
                 '<div class="flex gap-2">' +
                 '<a href="/job/' + job.id + '/match" class="text-blue-500 hover:text-blue-600">匹配</a>' +
-                '<a href="/job/' + job.id + '/interview" class="text-purple-500 hover:text-purple-600">面试</a>' +
                 '<a href="/job/' + job.id + '/optimize" class="text-green-500 hover:text-green-600">优化</a>' +
+                '<a href="/job/' + job.id + '/interview" class="text-purple-500 hover:text-purple-600">面试</a>' +
                 '</div></div>' +
                 '</div>';
             }).join('');
