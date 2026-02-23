@@ -137,7 +137,7 @@ export async function resolveWikiToken(wikiToken: string, tenantToken: string): 
  * 电子表格中可能嵌入多维表格 block，需要通过 metainfo 或 sheets 列表找到
  */
 async function resolveSheetEmbeddedBitable(sheetToken: string, tenantToken: string): Promise<string> {
-  // 获取电子表格的元数据
+  // 获取电子表格的元数据（v2 接口包含 blockInfo）
   const metaResp = await fetch(
     `https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/${sheetToken}/metainfo`,
     {
@@ -147,16 +147,27 @@ async function resolveSheetEmbeddedBitable(sheetToken: string, tenantToken: stri
 
   const metaData = await metaResp.json() as any;
   
-  if (metaData.code === 0 && metaData.data?.properties?.sheets) {
-    // 遍历 sheets 列表，查找 bitable 类型的 block
-    for (const sheet of metaData.data.properties.sheets) {
-      if (sheet.resource_type === 'bitable' && sheet.bitable_token) {
-        return sheet.bitable_token;
+  if (metaData.code === 0 && metaData.data?.sheets) {
+    // 遍历 sheets，查找 BITABLE_BLOCK 类型
+    // blockToken 格式: "{bitable_app_token}_{table_id}"
+    for (const sheet of metaData.data.sheets) {
+      const blockInfo = sheet.blockInfo;
+      if (blockInfo?.blockType === 'BITABLE_BLOCK' && blockInfo.blockToken) {
+        // 提取 app_token（blockToken 中下划线前的部分，但 table_id 以 tbl 开头）
+        const bt = blockInfo.blockToken as string;
+        const tblIdx = bt.lastIndexOf('_tbl');
+        if (tblIdx > 0) {
+          const appToken = bt.substring(0, tblIdx);
+          console.log(`[Feishu] 从 blockToken 提取 app_token: ${bt} -> ${appToken}`);
+          return appToken;
+        }
+        // fallback: 直接返回整个 blockToken
+        return bt;
       }
     }
   }
 
-  // 如果元数据接口没有返回，尝试 sheets query 接口
+  // 如果 v2 接口没拿到，尝试 v3 sheets query + 用 blockToken 格式查找
   const sheetsResp = await fetch(
     `https://open.feishu.cn/open-apis/sheets/v3/spreadsheets/${sheetToken}/sheets/query`,
     {
@@ -167,8 +178,9 @@ async function resolveSheetEmbeddedBitable(sheetToken: string, tenantToken: stri
   const sheetsData = await sheetsResp.json() as any;
   if (sheetsData.code === 0 && sheetsData.data?.sheets) {
     for (const sheet of sheetsData.data.sheets) {
-      if (sheet.resource_type === 'bitable' && sheet.bitable_token) {
-        return sheet.bitable_token;
+      if (sheet.resource_type === 'bitable') {
+        // v3 接口可能有 bitable_token 或需要回退到 v2 获取
+        if (sheet.bitable_token) return sheet.bitable_token;
       }
     }
   }
@@ -215,6 +227,18 @@ export async function getTableFields(
  * - 不存在的字段自动忽略，不会报错
  * - 支持文本、单选、多选、超链接、日期等字段类型
  */
+/**
+ * 将 Job 数据映射为飞书多维表格的 fields 对象
+ * 
+ * 适配原始「求职进度追踪表」的 24 个字段：
+ *   任务描述(Text), 公司(MultiSelect), 匹配度(MultiSelect), 优先级(SingleSelect),
+ *   状态(SingleSelect), 投递渠道(SingleSelect), 面试进度(SingleSelect),
+ *   投递时间(DateTime), 面试日期(DateTime), 岗位分析(Text), 产品类型(SingleSelect),
+ *   业务领域(Text), 团队阶段(MultiSelect), 行业背景(Text), 技术背景(Text),
+ *   产品经验(Text), 产品能力(Text), 公司业务/竞品调研/面试准备(Url),
+ *   薪资(Text), 附件(Attachment), 技术栈(Text), 父记录(SingleLink),
+ *   其他(Text), JD链接(Url)
+ */
 export function mapJobToFeishuFields(job: Job): Record<string, any> {
   const jd = job.structured_jd;
   const aAnalysis = job.a_analysis;
@@ -222,36 +246,52 @@ export function mapJobToFeishuFields(job: Job): Record<string, any> {
 
   const fields: Record<string, any> = {};
 
-  // === 基础信息（文本字段） ===
-  if (job.title) fields['岗位名称'] = job.title;
-  if (job.company) fields['公司名称'] = job.company;
-  if (jd?.location) fields['工作地点'] = jd.location;
-  if (jd?.salary) fields['薪资范围'] = jd.salary;
+  // === 任务描述 (Text, 主字段) — 岗位标题 ===
+  if (job.title) {
+    fields['任务描述'] = job.title;
+  }
 
-  // 岗位链接 —— URL 字段格式
+  // === 公司 (MultiSelect) ===
+  if (job.company) {
+    fields['公司'] = [job.company];
+  }
+
+  // === 薪资 (Text) ===
+  if (jd?.salary) {
+    fields['薪资'] = jd.salary;
+  }
+
+  // === JD链接 (Url) ===
   if (job.job_url) {
-    fields['岗位链接'] = { link: job.job_url, text: job.job_url };
+    fields['JD链接'] = { link: job.job_url, text: job.title || job.job_url };
+  }
+
+  // === 状态 (SingleSelect) — 默认「未投」 ===
+  fields['状态'] = '未投';
+
+  // === 投递时间 (DateTime, 毫秒时间戳) ===
+  const parseTs = job.created_at ? new Date(job.created_at).getTime() : Date.now();
+  if (!isNaN(parseTs)) {
+    fields['投递时间'] = parseTs;
   }
 
   // === A维度分析 ===
   if (aAnalysis) {
-    // 产品类型（单选字段，需匹配: ToB/ToC/ToG/平台型/未知）
+    // 产品类型 (SingleSelect)
     if (aAnalysis.A2_product_type?.type) {
-      const typeMap: Record<string, string> = { 'To B': 'ToB', 'To C': 'ToC', 'To G': 'ToG' };
-      const raw = aAnalysis.A2_product_type.type;
-      fields['产品类型'] = typeMap[raw] || raw;
+      fields['产品类型'] = aAnalysis.A2_product_type.type;
     }
-    // 业务领域（文本字段）
+    // 业务领域 (Text)
     if (aAnalysis.A3_business_domain?.primary) {
       fields['业务领域'] = aAnalysis.A3_business_domain.primary;
     }
-    // 团队阶段（单选字段，需匹配: 初创期/成长期/成熟期/未知）
+    // 团队阶段 (MultiSelect)
     if (aAnalysis.A4_team_stage?.stage) {
-      fields['团队阶段'] = aAnalysis.A4_team_stage.stage;
+      fields['团队阶段'] = [aAnalysis.A4_team_stage.stage];
     }
-    // 技术栈关键词（文本字段，逗号分隔）
+    // 技术栈 (Text)
     if (aAnalysis.A1_tech_stack?.keywords?.length) {
-      fields['技术栈关键词'] = Array.isArray(aAnalysis.A1_tech_stack.keywords)
+      fields['技术栈'] = Array.isArray(aAnalysis.A1_tech_stack.keywords)
         ? aAnalysis.A1_tech_stack.keywords.join('、')
         : String(aAnalysis.A1_tech_stack.keywords);
     }
@@ -259,58 +299,45 @@ export function mapJobToFeishuFields(job: Job): Record<string, any> {
 
   // === B维度分析 ===
   if (bAnalysis) {
-    // 学历要求（单选字段，需匹配: 本科/硕士/博士/大专/不限）
-    if (bAnalysis.B2_tech_requirement?.education) {
-      fields['学历要求'] = bAnalysis.B2_tech_requirement.education;
-    }
-    // 经验要求（文本字段）
+    // 行业背景 (Text)
     if (bAnalysis.B1_industry_requirement?.summary) {
-      fields['经验要求'] = bAnalysis.B1_industry_requirement.summary;
-    } else if (bAnalysis.B1_industry_requirement?.years) {
-      fields['经验要求'] = `${bAnalysis.B1_industry_requirement.years}年`;
+      fields['行业背景'] = bAnalysis.B1_industry_requirement.summary;
     }
-    // 核心能力（文本字段）
+    // 技术背景 (Text)
+    if (bAnalysis.B2_tech_requirement?.summary) {
+      fields['技术背景'] = bAnalysis.B2_tech_requirement.summary;
+    } else if (bAnalysis.B2_tech_requirement?.education) {
+      fields['技术背景'] = `学历: ${bAnalysis.B2_tech_requirement.education}`;
+    }
+    // 产品经验 (Text)
+    if (bAnalysis.B3_product_requirement?.summary) {
+      fields['产品经验'] = bAnalysis.B3_product_requirement.summary;
+    }
+    // 产品能力 (Text)
     if (bAnalysis.B4_capability_requirement?.summary) {
-      fields['核心能力'] = bAnalysis.B4_capability_requirement.summary;
+      fields['产品能力'] = bAnalysis.B4_capability_requirement.summary;
     }
   }
 
-  // === 岗位亮点/风险（文本字段） ===
+  // === 岗位分析 (Text) — 综合摘要 ===
+  const analysisParts: string[] = [];
+  if (jd?.location) analysisParts.push(`📍 ${jd.location}`);
   if (jd?.highlights?.length) {
-    fields['岗位亮点'] = Array.isArray(jd.highlights) ? jd.highlights.join('；') : String(jd.highlights);
+    analysisParts.push(`✅ 亮点: ${(Array.isArray(jd.highlights) ? jd.highlights : [jd.highlights]).join('；')}`);
   }
   if (jd?.risks?.length) {
-    fields['风险提示'] = Array.isArray(jd.risks) ? jd.risks.join('；') : String(jd.risks);
+    analysisParts.push(`⚠️ 风险: ${(Array.isArray(jd.risks) ? jd.risks : [jd.risks]).join('；')}`);
   }
-  // 兼容 aAnalysis 中的亮点/风险
-  if (!fields['岗位亮点'] && aAnalysis?.highlights?.length) {
-    fields['岗位亮点'] = Array.isArray(aAnalysis.highlights) ? aAnalysis.highlights.join('；') : String(aAnalysis.highlights);
+  if (jd?.responsibilities?.length) {
+    analysisParts.push(`📋 职责: ${jd.responsibilities.slice(0, 3).join('；')}`);
   }
-  if (!fields['风险提示'] && aAnalysis?.risks?.length) {
-    fields['风险提示'] = Array.isArray(aAnalysis.risks) ? aAnalysis.risks.join('；') : String(aAnalysis.risks);
-  }
-
-  // === 数据来源（单选字段，需匹配: 文本解析/图片解析/URL抓取） ===
-  if (job.source_type === 'image') {
-    fields['数据来源'] = '图片解析';
-  } else if (job.source_type === 'url') {
-    fields['数据来源'] = 'URL抓取';
-  } else {
-    fields['数据来源'] = '文本解析';
+  if (analysisParts.length > 0) {
+    fields['岗位分析'] = analysisParts.join('\n');
   }
 
-  // === 投递状态（单选字段，默认待投递） ===
-  fields['投递状态'] = '待投递';
-
-  // === 解析时间（日期字段，毫秒时间戳） ===
-  if (job.created_at) {
-    const ts = new Date(job.created_at).getTime();
-    if (!isNaN(ts)) {
-      fields['解析时间'] = ts;
-    }
-  } else {
-    fields['解析时间'] = Date.now();
-  }
+  // === 其他 (Text) — 数据来源标记 ===
+  const sourceLabel = job.source_type === 'image' ? '图片解析' : job.source_type === 'url' ? 'URL抓取' : '文本解析';
+  fields['其他'] = `[Job Copilot 自动同步] 来源: ${sourceLabel}`;
 
   return fields;
 }
