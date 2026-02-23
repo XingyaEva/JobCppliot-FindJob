@@ -274,6 +274,30 @@ export const renderer = jsxRenderer(({ children, title }) => {
             window.JobCopilot.saveExperiments = function(experiments) {
               localStorage.setItem(EXPERIMENTS_KEY, JSON.stringify(experiments));
             };
+
+            // ==================== 飞书同步自动恢复 ====================
+            // 页面加载时自动将 localStorage 中的飞书配置同步到后端
+            (function initFeishuSync() {
+              try {
+                var saved = localStorage.getItem('jobcopilot_feishu_config');
+                if (saved) {
+                  var cfg = JSON.parse(saved);
+                  if (cfg.appId && cfg.appSecret && cfg.appToken && cfg.tableId && cfg.enabled) {
+                    fetch('/api/feishu/config', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        appId: cfg.appId,
+                        appSecret: cfg.appSecret,
+                        appToken: cfg.appToken,
+                        tableId: cfg.tableId,
+                        enabled: cfg.enabled
+                      })
+                    }).catch(function() {});
+                  }
+                }
+              } catch(e) {}
+            })();
           `
         }} />
       </body>

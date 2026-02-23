@@ -7,7 +7,12 @@
     "nodejs_compat"
   ],
   "vars": {
-    "PYTHON_SERVICE_URL": "https://pdf-parser-service-y24s.onrender.com"
+    "PYTHON_SERVICE_URL": "https://pdf-parser-service-y24s.onrender.com",
+    "FEISHU_APP_ID": "",
+    "FEISHU_APP_SECRET": "",
+    "FEISHU_APP_TOKEN": "",
+    "FEISHU_TABLE_ID": "",
+    "FEISHU_ENABLED": "true"
   },
   // "kv_namespaces": [
   // "kv_namespaces": [

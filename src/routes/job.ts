@@ -10,6 +10,7 @@ import { executeJDStructure } from '../agents/jd-structure';
 import { executeAAnalysis } from '../agents/jd-analysis-a';
 import { executeBAnalysis } from '../agents/jd-analysis-b';
 import type { Job, StructuredJD, AAnalysis, DAGState } from '../types';
+import { syncJobToFeishu, initFeishuConfigFromEnv } from '../core/feishu';
 import { 
   scrapeJobUrl, 
   validateUrl, 
@@ -209,6 +210,12 @@ jobRoutes.post('/parse', async (c) => {
         job.a_analysis = result.aAnalysis;
         job.b_analysis = result.bAnalysis;
         job.status = 'completed';
+        
+        // 飞书同步（异步，不阻塞）
+        syncJobToFeishu(job).then(r => {
+          if (r.success) console.log(`[Feishu] 自动同步成功: ${job.title}, recordId: ${r.recordId}`);
+          else if (r.error !== '飞书同步未启用') console.warn(`[Feishu] 自动同步失败: ${r.error}`);
+        }).catch(e => console.warn('[Feishu] 自动同步异常:', e));
       } else {
         job.status = 'error';
         job.error_message = result.error;
@@ -324,6 +331,12 @@ jobRoutes.post('/parse-sync', async (c) => {
 
     console.log(`[API] 同步解析完成，ID: ${jobId}`);
 
+    // 飞书同步（异步，不阻塞响应）
+    syncJobToFeishu(job).then(r => {
+      if (r.success) console.log(`[Feishu] 自动同步成功: ${job.title}, recordId: ${r.recordId}`);
+      else if (r.error !== '飞书同步未启用') console.warn(`[Feishu] 自动同步失败: ${r.error}`);
+    }).catch(e => console.warn('[Feishu] 自动同步异常:', e));
+
     return c.json({
       success: true,
       job,
@@ -434,6 +447,12 @@ jobRoutes.post('/parse-async', async (c) => {
           task.updatedAt = Date.now();
           
           console.log(`[API] 异步解析完成，任务ID: ${taskId}, 岗位: ${job.title}`);
+          
+          // 飞书同步（异步，不阻塞）
+          syncJobToFeishu(job).then(r => {
+            if (r.success) console.log(`[Feishu] 自动同步成功: ${job.title}, recordId: ${r.recordId}`);
+            else if (r.error !== '飞书同步未启用') console.warn(`[Feishu] 自动同步失败: ${r.error}`);
+          }).catch(e => console.warn('[Feishu] 自动同步异常:', e));
         } else {
           task.status = 'error';
           task.error = result.error;

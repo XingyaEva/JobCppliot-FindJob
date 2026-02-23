@@ -14,6 +14,8 @@ import optimizeRoutes from './routes/optimize'
 import { metricsRoutes } from './routes/metrics'
 import questionRoutes from './routes/questions'
 import applicationRoutes from './routes/applications'
+import feishuRoutes from './routes/feishu'
+import { initFeishuConfigFromEnv } from './core/feishu'
 
 // 创建应用实例
 const app = new Hono()
@@ -21,6 +23,13 @@ const app = new Hono()
 // 中间件
 app.use('*', cors())
 app.use(renderer)
+
+// 飞书配置初始化（从环境变量，仅首次请求时执行）
+app.use('*', async (c, next) => {
+  const env = (c.env || {}) as Record<string, string>;
+  initFeishuConfigFromEnv(env);
+  await next();
+})
 
 // ==================== 页面路由 ====================
 
@@ -241,9 +250,14 @@ app.get('/job/new', (c) => {
             </a>
             <h1 class="text-xl font-bold">新建岗位解析</h1>
           </div>
-          <a href="/job/cookie-settings" class="text-sm text-gray-500 hover:text-gray-700">
-            <i class="fas fa-cog mr-1"></i>Cookie设置
-          </a>
+          <div class="flex items-center gap-3">
+            <a href="/settings/feishu" class="text-sm text-gray-500 hover:text-gray-700">
+              <i class="fas fa-feather mr-1"></i>飞书同步
+            </a>
+            <a href="/job/cookie-settings" class="text-sm text-gray-500 hover:text-gray-700">
+              <i class="fas fa-cog mr-1"></i>Cookie设置
+            </a>
+          </div>
         </div>
       </header>
       
@@ -1194,6 +1208,368 @@ app.get('/job/cookie-settings', (c) => {
       }} />
     </div>,
     { title: 'Cookie 设置 - Job Copilot' }
+  )
+})
+
+// ==================== 飞书设置页面 ====================
+app.get('/settings/feishu', (c) => {
+  return c.render(
+    <div class="min-h-screen bg-gray-50">
+      {/* 顶部导航 */}
+      <header class="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
+        <div class="max-w-4xl mx-auto px-4">
+          <div class="flex items-center justify-between h-14">
+            <div class="flex items-center gap-4">
+              <a href="/" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-arrow-left"></i>
+              </a>
+              <h1 class="text-lg font-bold">
+                <i class="fas fa-feather mr-2 text-blue-500"></i>
+                飞书多维表格集成
+              </h1>
+            </div>
+            <div id="sync-status" class="text-sm text-gray-500">
+              <i class="fas fa-circle text-gray-300 mr-1"></i>未连接
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="max-w-4xl mx-auto px-4 py-6">
+        {/* 说明卡片 */}
+        <div class="bg-blue-50 border border-blue-200 rounded-xl p-4 mb-6">
+          <div class="flex items-start gap-3">
+            <i class="fas fa-info-circle text-blue-500 mt-0.5"></i>
+            <div class="text-sm text-blue-800">
+              <p class="font-medium mb-1">功能说明</p>
+              <p>开启后，每次岗位解析完成会自动将结构化数据同步到你的飞书多维表格中，省去手动录入的工作。</p>
+              <p class="mt-1 text-blue-600">需要先在飞书开放平台创建自建应用并开通多维表格相关权限。</p>
+            </div>
+          </div>
+        </div>
+
+        {/* 配置表单 */}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+            <h2 class="font-bold text-gray-900">
+              <i class="fas fa-cog mr-2 text-gray-400"></i>连接配置
+            </h2>
+            <label class="relative inline-flex items-center cursor-pointer">
+              <input type="checkbox" id="feishu-enabled" class="sr-only peer" />
+              <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-500"></div>
+              <span class="ml-2 text-sm text-gray-600" id="toggle-label">已关闭</span>
+            </label>
+          </div>
+
+          <div class="px-6 py-5 space-y-5">
+            {/* App ID */}
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                App ID <span class="text-red-400">*</span>
+              </label>
+              <input type="text" id="feishu-app-id" placeholder="cli_xxxxxxxxxxxxxxxx"
+                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+              <p class="mt-1 text-xs text-gray-400">飞书开放平台 → 自建应用 → 凭证与基础信息</p>
+            </div>
+
+            {/* App Secret */}
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                App Secret <span class="text-red-400">*</span>
+              </label>
+              <div class="relative">
+                <input type="password" id="feishu-app-secret" placeholder="输入 App Secret"
+                  class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none pr-10" />
+                <button type="button" onclick="const inp=document.getElementById('feishu-app-secret');inp.type=inp.type==='password'?'text':'password';this.querySelector('i').className=inp.type==='password'?'fas fa-eye':'fas fa-eye-slash'"
+                  class="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+            </div>
+
+            {/* 多维表格 URL */}
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1">
+                多维表格 URL 或 App Token <span class="text-red-400">*</span>
+              </label>
+              <input type="text" id="feishu-url" placeholder="https://xxx.feishu.cn/wiki/xxx?table=tblxxx 或直接填入 app_token"
+                class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
+              <p class="mt-1 text-xs text-gray-400">粘贴多维表格的完整 URL，系统会自动提取 token 和 table_id</p>
+            </div>
+
+            {/* 解析后的 token 显示 */}
+            <div id="parsed-tokens" class="hidden">
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 mb-1">App Token</label>
+                  <input type="text" id="feishu-app-token" readonly
+                    class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs bg-gray-50 text-gray-600" />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-gray-500 mb-1">Table ID</label>
+                  <input type="text" id="feishu-table-id" readonly
+                    class="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs bg-gray-50 text-gray-600" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* 操作按钮 */}
+          <div class="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center gap-3">
+            <button id="btn-test" onclick="testFeishuConnection()"
+              class="px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors">
+              <i class="fas fa-plug mr-1.5"></i>测试连接
+            </button>
+            <button id="btn-save" onclick="saveFeishuConfig()"
+              class="px-4 py-2 bg-blue-500 text-white rounded-lg text-sm font-medium hover:bg-blue-600 transition-colors">
+              <i class="fas fa-save mr-1.5"></i>保存配置
+            </button>
+          </div>
+        </div>
+
+        {/* 连接测试结果 */}
+        <div id="test-result" class="hidden mt-4"></div>
+
+        {/* 字段映射说明 */}
+        <div class="bg-white rounded-xl shadow-sm border border-gray-200 mt-6 overflow-hidden">
+          <div class="px-6 py-4 border-b border-gray-100">
+            <h2 class="font-bold text-gray-900">
+              <i class="fas fa-exchange-alt mr-2 text-gray-400"></i>字段映射说明
+            </h2>
+          </div>
+          <div class="px-6 py-4">
+            <p class="text-sm text-gray-500 mb-3">系统会按以下名称匹配你多维表格中的字段。字段不存在则自动跳过，不会报错。</p>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-2 text-sm">
+              {[
+                { icon: 'fas fa-briefcase', name: '岗位名称', desc: '职位标题' },
+                { icon: 'fas fa-building', name: '公司名称', desc: '公司全称' },
+                { icon: 'fas fa-map-marker-alt', name: '工作地点', desc: '城市' },
+                { icon: 'fas fa-money-bill', name: '薪资范围', desc: '如 15-25K' },
+                { icon: 'fas fa-link', name: '岗位链接', desc: '超链接' },
+                { icon: 'fas fa-cube', name: '产品类型', desc: 'ToB/ToC' },
+                { icon: 'fas fa-industry', name: '业务领域', desc: '主要行业' },
+                { icon: 'fas fa-users', name: '团队阶段', desc: '发展期等' },
+                { icon: 'fas fa-tags', name: '技术栈关键词', desc: '多选' },
+                { icon: 'fas fa-graduation-cap', name: '学历要求', desc: '本科等' },
+                { icon: 'fas fa-clock', name: '经验年限', desc: '工作年限' },
+                { icon: 'fas fa-calendar', name: '解析时间', desc: '日期' },
+              ].map(f => (
+                <div class="flex items-center gap-2 px-3 py-2 bg-gray-50 rounded-lg">
+                  <i class={`${f.icon} text-gray-400 text-xs w-4`}></i>
+                  <span class="font-medium text-gray-700">{f.name}</span>
+                  <span class="text-gray-400 text-xs">({f.desc})</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 页面脚本 */}
+      <script dangerouslySetInnerHTML={{__html: `
+        const FEISHU_STORAGE_KEY = 'jobcopilot_feishu_config';
+
+        // 从 URL 中提取 app_token 和 table_id
+        function parseFeishuUrl(input) {
+          input = input.trim();
+          let appToken = '', tableId = '';
+
+          try {
+            // 尝试解析为 URL
+            if (input.startsWith('http')) {
+              const url = new URL(input);
+              const path = url.pathname;
+
+              // 知识库: /wiki/{token}
+              const wikiMatch = path.match(/\\/wiki\\/([A-Za-z0-9]+)/);
+              // 多维表格: /base/{token}
+              const baseMatch = path.match(/\\/base\\/([A-Za-z0-9]+)/);
+
+              appToken = wikiMatch?.[1] || baseMatch?.[1] || '';
+              tableId = url.searchParams.get('table') || '';
+            } else {
+              // 直接作为 app_token
+              appToken = input;
+            }
+          } catch {
+            appToken = input;
+          }
+
+          return { appToken, tableId };
+        }
+
+        // URL 输入自动解析
+        document.getElementById('feishu-url').addEventListener('input', function(e) {
+          const val = e.target.value;
+          const { appToken, tableId } = parseFeishuUrl(val);
+
+          if (appToken) {
+            document.getElementById('feishu-app-token').value = appToken;
+            document.getElementById('feishu-table-id').value = tableId;
+            document.getElementById('parsed-tokens').classList.remove('hidden');
+          } else {
+            document.getElementById('parsed-tokens').classList.add('hidden');
+          }
+        });
+
+        // 开关切换
+        document.getElementById('feishu-enabled').addEventListener('change', function(e) {
+          document.getElementById('toggle-label').textContent = e.target.checked ? '已启用' : '已关闭';
+        });
+
+        // 加载已保存的配置
+        function loadConfig() {
+          try {
+            const saved = localStorage.getItem(FEISHU_STORAGE_KEY);
+            if (saved) {
+              const cfg = JSON.parse(saved);
+              document.getElementById('feishu-app-id').value = cfg.appId || '';
+              document.getElementById('feishu-app-secret').value = cfg.appSecret || '';
+              document.getElementById('feishu-url').value = cfg.url || '';
+              document.getElementById('feishu-enabled').checked = cfg.enabled !== false;
+              document.getElementById('toggle-label').textContent = cfg.enabled !== false ? '已启用' : '已关闭';
+
+              if (cfg.appToken || cfg.tableId) {
+                document.getElementById('feishu-app-token').value = cfg.appToken || '';
+                document.getElementById('feishu-table-id').value = cfg.tableId || '';
+                document.getElementById('parsed-tokens').classList.remove('hidden');
+              }
+
+              // 同步到后端
+              if (cfg.appId && cfg.appSecret && cfg.appToken && cfg.tableId) {
+                fetch('/api/feishu/config', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    appId: cfg.appId,
+                    appSecret: cfg.appSecret,
+                    appToken: cfg.appToken,
+                    tableId: cfg.tableId,
+                    enabled: cfg.enabled !== false,
+                  })
+                }).then(r => r.json()).then(d => {
+                  if (d.success) {
+                    document.getElementById('sync-status').innerHTML =
+                      '<i class="fas fa-circle text-green-400 mr-1"></i>已配置';
+                  }
+                });
+              }
+            }
+          } catch(e) {
+            console.error('加载飞书配置失败:', e);
+          }
+        }
+
+        // 测试连接
+        async function testFeishuConnection() {
+          const btn = document.getElementById('btn-test');
+          const resultEl = document.getElementById('test-result');
+          btn.disabled = true;
+          btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>测试中...';
+          resultEl.classList.remove('hidden');
+          resultEl.innerHTML = '<div class="bg-gray-100 rounded-xl p-4 text-center text-sm text-gray-500"><i class="fas fa-spinner fa-spin mr-2"></i>正在连接飞书...</div>';
+
+          try {
+            const appId = document.getElementById('feishu-app-id').value.trim();
+            const appSecret = document.getElementById('feishu-app-secret').value.trim();
+            const appToken = document.getElementById('feishu-app-token').value.trim();
+            const tableId = document.getElementById('feishu-table-id').value.trim();
+
+            if (!appId || !appSecret || !appToken || !tableId) {
+              throw new Error('请填写完整配置信息');
+            }
+
+            const resp = await fetch('/api/feishu/test', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ appId, appSecret, appToken, tableId })
+            });
+            const data = await resp.json();
+
+            if (data.success) {
+              const fieldsHtml = data.fields?.map(f =>
+                '<span class="inline-block px-2 py-0.5 bg-green-50 text-green-700 rounded text-xs mr-1 mb-1">' + f.name + '</span>'
+              ).join('') || '';
+
+              resultEl.innerHTML =
+                '<div class="bg-green-50 border border-green-200 rounded-xl p-4">' +
+                '<div class="flex items-center gap-2 text-green-700 font-medium mb-2">' +
+                '<i class="fas fa-check-circle"></i> ' + data.message + '</div>' +
+                '<div class="text-sm text-green-600">已识别的字段：</div>' +
+                '<div class="mt-2">' + fieldsHtml + '</div></div>';
+
+              document.getElementById('sync-status').innerHTML =
+                '<i class="fas fa-circle text-green-400 mr-1"></i>已连接';
+            } else {
+              resultEl.innerHTML =
+                '<div class="bg-red-50 border border-red-200 rounded-xl p-4">' +
+                '<div class="flex items-center gap-2 text-red-700 font-medium mb-1">' +
+                '<i class="fas fa-times-circle"></i> 连接失败</div>' +
+                '<p class="text-sm text-red-600">' + data.message + '</p></div>';
+            }
+          } catch (e) {
+            resultEl.innerHTML =
+              '<div class="bg-red-50 border border-red-200 rounded-xl p-4">' +
+              '<div class="text-red-700"><i class="fas fa-times-circle mr-1"></i>' + e.message + '</div></div>';
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-plug mr-1.5"></i>测试连接';
+          }
+        }
+
+        // 保存配置
+        async function saveFeishuConfig() {
+          const btn = document.getElementById('btn-save');
+          try {
+            const appId = document.getElementById('feishu-app-id').value.trim();
+            const appSecret = document.getElementById('feishu-app-secret').value.trim();
+            const url = document.getElementById('feishu-url').value.trim();
+            const appToken = document.getElementById('feishu-app-token').value.trim();
+            const tableId = document.getElementById('feishu-table-id').value.trim();
+            const enabled = document.getElementById('feishu-enabled').checked;
+
+            if (!appId || !appSecret || !appToken || !tableId) {
+              if (typeof JobCopilot !== 'undefined') JobCopilot.toast('请填写完整配置信息', 'error');
+              return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1.5"></i>保存中...';
+
+            // 保存到 localStorage（前端持久化）
+            localStorage.setItem(FEISHU_STORAGE_KEY, JSON.stringify({
+              appId, appSecret, url, appToken, tableId, enabled
+            }));
+
+            // 同步到后端（运行时配置）
+            const resp = await fetch('/api/feishu/config', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ appId, appSecret, appToken, tableId, enabled })
+            });
+            const data = await resp.json();
+
+            if (data.success) {
+              if (typeof JobCopilot !== 'undefined') JobCopilot.toast('飞书配置已保存', 'success');
+              document.getElementById('sync-status').innerHTML = enabled
+                ? '<i class="fas fa-circle text-green-400 mr-1"></i>已配置'
+                : '<i class="fas fa-circle text-yellow-400 mr-1"></i>已暂停';
+            } else {
+              throw new Error(data.error);
+            }
+          } catch (e) {
+            if (typeof JobCopilot !== 'undefined') JobCopilot.toast('保存失败: ' + e.message, 'error');
+          } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-save mr-1.5"></i>保存配置';
+          }
+        }
+
+        // 页面加载
+        loadConfig();
+      `}} />
+    </div>,
+    { title: '飞书集成设置 - Job Copilot' }
   )
 })
 
@@ -8569,6 +8945,9 @@ app.route('/api/questions', questionRoutes)
 
 // 挂载投递跟踪相关路由
 app.route('/api/applications', applicationRoutes)
+
+// 挂载飞书集成相关路由
+app.route('/api/feishu', feishuRoutes)
 
 // API健康检查
 app.get('/api/health', (c) => {
