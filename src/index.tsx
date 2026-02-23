@@ -211,20 +211,27 @@ app.get('/', (c) => {
             }
 
             recentJobs.innerHTML = jobs.slice(0, 6).map(function(job) {
+              var syncBadge = '';
+              if (job.feishu_sync && job.feishu_sync.status === 'success') {
+                syncBadge = '<span class="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 rounded-full font-medium inline-flex items-center gap-0.5"><i class="fas fa-check-circle text-[8px]"></i>\u5df2\u540c\u6b65</span>';
+              } else if (job.feishu_sync && job.feishu_sync.status === 'failed') {
+                syncBadge = '<span class="text-[10px] px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded-full font-medium inline-flex items-center gap-0.5"><i class="fas fa-times-circle text-[8px]"></i>\u540c\u6b65\u5931\u8d25</span>';
+              }
               return '<div class="glass-card rounded-[16px] p-5 card-hover group">' +
                 '<div class="flex items-start justify-between mb-2">' +
-                '<a href="/job/' + job.id + '" class="text-[15px] font-semibold text-primary hover:text-accent transition-colors leading-snug">' + (job.title || '未命名岗位') + '</a>' +
-                '<button onclick="event.stopPropagation();JobCopilot.deleteJob(\\'' + job.id + '\\')" class="text-secondary/30 hover:text-error p-1 opacity-0 group-hover:opacity-100 transition-all" title="删除">' +
+                '<a href="/job/' + job.id + '" class="text-[15px] font-semibold text-primary hover:text-accent transition-colors leading-snug">' + (job.title || '\u672a\u547d\u540d\u5c97\u4f4d') + '</a>' +
+                '<button onclick="event.stopPropagation();JobCopilot.deleteJob(\\'' + job.id + '\\')" class="text-secondary/30 hover:text-error p-1 opacity-0 group-hover:opacity-100 transition-all" title="\u5220\u9664">' +
                 '<i class="fas fa-trash-can text-[11px]"></i></button>' +
                 '</div>' +
                 '<p class="text-[13px] text-secondary mb-3">' + (job.company || '') + '</p>' +
                 '<div class="flex flex-wrap gap-1.5 mb-3">' +
                 (job.a_analysis && job.a_analysis.A2_product_type && job.a_analysis.A2_product_type.type ? '<span class="text-[11px] px-2 py-0.5 bg-blue-500/8 text-blue-600 rounded-full font-medium">' + job.a_analysis.A2_product_type.type + '</span>' : '') +
                 (job.a_analysis && job.a_analysis.A3_business_domain && job.a_analysis.A3_business_domain.primary ? '<span class="text-[11px] px-2 py-0.5 bg-emerald-500/8 text-emerald-600 rounded-full font-medium">' + job.a_analysis.A3_business_domain.primary + '</span>' : '') +
+                syncBadge +
                 '</div>' +
                 '<div class="flex items-center justify-between text-[12px] text-secondary/50">' +
                 '<span>' + new Date(job.created_at).toLocaleDateString() + '</span>' +
-                '<a href="/job/' + job.id + '/match" class="text-accent hover:text-accent-hover font-medium transition-colors">匹配分析 <i class="fas fa-arrow-right text-[9px] ml-0.5"></i></a>' +
+                '<a href="/job/' + job.id + '/match" class="text-accent hover:text-accent-hover font-medium transition-colors">\u5339\u914d\u5206\u6790 <i class="fas fa-arrow-right text-[9px] ml-0.5"></i></a>' +
                 '</div>' +
                 '</div>';
             }).join('');
@@ -1603,6 +1610,9 @@ app.get('/job/:id', (c) => {
               <a id="action-interview" href="#" class="px-3 py-1.5 text-sm bg-purple-500 text-white rounded-lg hover:bg-purple-600">
                 <i class="fas fa-comments mr-1"></i><span class="hidden sm:inline">面试</span>
               </a>
+              <button id="action-feishu-sync" class="hidden px-3 py-1.5 text-sm bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all">
+                <i class="fas fa-cloud-arrow-up mr-1"></i><span class="hidden sm:inline">同步飞书</span>
+              </button>
             </div>
           </div>
         </div>
@@ -1696,6 +1706,16 @@ app.get('/job/:id', (c) => {
               </div>
             </div>
 
+            {/* 飞书同步状态条 - Desktop */}
+            <div id="feishu-sync-bar-desktop" class="hidden mb-6 rounded-xl border p-4 flex items-center justify-between text-sm transition-all">
+              <div class="flex items-center gap-2">
+                <span id="feishu-sync-icon-desktop"></span>
+                <span id="feishu-sync-text-desktop"></span>
+                <span id="feishu-sync-time-desktop" class="text-xs opacity-60"></span>
+              </div>
+              <button id="feishu-sync-action-desktop" class="px-3 py-1 rounded-lg text-xs font-medium transition-colors"></button>
+            </div>
+
             {/* A维度分析 */}
             <div class="bg-white rounded-xl border border-gray-200 p-6 mb-6">
               <h3 class="text-lg font-semibold mb-4 flex items-center">
@@ -1765,6 +1785,15 @@ app.get('/job/:id', (c) => {
                 <span>查看原帖</span>
               </a>
             </div>
+          </div>
+
+          {/* 飞书同步状态条 - Mobile */}
+          <div id="feishu-sync-bar-mobile" class="hidden rounded-xl border p-4 flex items-center justify-between text-sm transition-all">
+            <div class="flex items-center gap-2">
+              <span id="feishu-sync-icon-mobile"></span>
+              <span id="feishu-sync-text-mobile"></span>
+            </div>
+            <button id="feishu-sync-action-mobile" class="px-3 py-1 rounded-lg text-xs font-medium transition-colors"></button>
           </div>
 
           {/* A维度分析 */}
@@ -2380,6 +2409,152 @@ app.get('/job/:id', (c) => {
                 (b4.summary ? '<p class="text-gray-600 bg-gray-50 p-2 rounded mt-2 text-xs"><i class="fas fa-lightbulb mr-1 text-yellow-500"></i>' + b4.summary + '</p>' : '') +
                 '</div>';
             }
+
+            // ==================== 飞书同步功能 ====================
+            var feishuConfig = null;
+            try { feishuConfig = JSON.parse(localStorage.getItem('jobcopilot_feishu_config') || 'null'); } catch(e) {}
+            var feishuEnabled = feishuConfig && feishuConfig.enabled && feishuConfig.appId && feishuConfig.appToken;
+
+            // 显示/隐藏飞书同步按钮
+            var feishuSyncBtn = document.getElementById('action-feishu-sync');
+            if (feishuEnabled && feishuSyncBtn) {
+              feishuSyncBtn.classList.remove('hidden');
+            }
+
+            // 渲染同步状态条
+            function renderFeishuSyncBar() {
+              var sync = job.feishu_sync;
+              var bars = [
+                { bar: document.getElementById('feishu-sync-bar-desktop'), icon: document.getElementById('feishu-sync-icon-desktop'), text: document.getElementById('feishu-sync-text-desktop'), time: document.getElementById('feishu-sync-time-desktop'), action: document.getElementById('feishu-sync-action-desktop') },
+                { bar: document.getElementById('feishu-sync-bar-mobile'), icon: document.getElementById('feishu-sync-icon-mobile'), text: document.getElementById('feishu-sync-text-mobile'), time: null, action: document.getElementById('feishu-sync-action-mobile') }
+              ];
+
+              if (!feishuEnabled) {
+                bars.forEach(function(b) { if (b.bar) b.bar.classList.add('hidden'); });
+                return;
+              }
+
+              bars.forEach(function(b) {
+                if (!b.bar) return;
+                b.bar.classList.remove('hidden');
+
+                if (sync && sync.status === 'success') {
+                  b.bar.className = b.bar.className.replace(/bg-\\S+|border-\\S+|text-\\S+/g, '').trim();
+                  b.bar.classList.add('mb-6', 'rounded-xl', 'border', 'p-4', 'flex', 'items-center', 'justify-between', 'text-sm', 'transition-all', 'bg-emerald-50', 'border-emerald-200', 'text-emerald-700');
+                  b.icon.innerHTML = '<i class="fas fa-check-circle text-emerald-500"></i>';
+                  b.text.textContent = '已同步飞书' + (sync.recordId ? '  ·  ID: ' + sync.recordId.substring(0, 12) : '');
+                  if (b.time && sync.synced_at) {
+                    var ago = Math.round((Date.now() - new Date(sync.synced_at).getTime()) / 60000);
+                    b.time.textContent = ago < 1 ? '刚刚' : ago < 60 ? ago + '分钟前' : Math.round(ago / 60) + '小时前';
+                  }
+                  b.action.textContent = '重新同步（覆盖）';
+                  b.action.className = 'px-3 py-1 rounded-lg text-xs font-medium transition-colors bg-emerald-100 text-emerald-600 hover:bg-emerald-200';
+                  b.action.onclick = function() { doFeishuSync(); };
+                } else if (sync && sync.status === 'failed') {
+                  b.bar.className = b.bar.className.replace(/bg-\\S+|border-\\S+|text-\\S+/g, '').trim();
+                  b.bar.classList.add('mb-6', 'rounded-xl', 'border', 'p-4', 'flex', 'items-center', 'justify-between', 'text-sm', 'transition-all', 'bg-red-50', 'border-red-200', 'text-red-700');
+                  b.icon.innerHTML = '<i class="fas fa-times-circle text-red-400"></i>';
+                  b.text.textContent = '同步失败' + (sync.error ? ': ' + sync.error.substring(0, 40) : '');
+                  if (b.time && sync.synced_at) {
+                    var ago2 = Math.round((Date.now() - new Date(sync.synced_at).getTime()) / 60000);
+                    b.time.textContent = ago2 < 1 ? '刚刚' : ago2 < 60 ? ago2 + '分钟前' : Math.round(ago2 / 60) + '小时前';
+                  }
+                  b.action.textContent = '重试';
+                  b.action.className = 'px-3 py-1 rounded-lg text-xs font-medium transition-colors bg-red-100 text-red-600 hover:bg-red-200';
+                  b.action.onclick = function() { doFeishuSync(); };
+                } else {
+                  b.bar.className = b.bar.className.replace(/bg-\\S+|border-\\S+|text-\\S+/g, '').trim();
+                  b.bar.classList.add('mb-6', 'rounded-xl', 'border', 'p-4', 'flex', 'items-center', 'justify-between', 'text-sm', 'transition-all', 'bg-gray-50', 'border-gray-200', 'text-gray-500');
+                  b.icon.innerHTML = '<i class="fas fa-cloud text-gray-300"></i>';
+                  b.text.textContent = '未同步飞书';
+                  if (b.time) b.time.textContent = '';
+                  b.action.textContent = '立即同步';
+                  b.action.className = 'px-3 py-1 rounded-lg text-xs font-medium transition-colors bg-teal-50 text-teal-600 hover:bg-teal-100';
+                  b.action.onclick = function() { doFeishuSync(); };
+                }
+              });
+            }
+
+            // 执行飞书同步
+            async function doFeishuSync() {
+              var btn = document.getElementById('action-feishu-sync');
+              var origBtnHtml = btn ? btn.innerHTML : '';
+
+              // Loading state
+              if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin mr-1"></i><span class="hidden sm:inline">同步中...</span>';
+              }
+
+              try {
+                // 如果已有 recordId，传给后端做覆盖更新
+                var existingRecordId = (job.feishu_sync && job.feishu_sync.status === 'success' && job.feishu_sync.recordId) ? job.feishu_sync.recordId : null;
+                var resp = await fetch('/api/feishu/sync-job', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ job: job, existingRecordId: existingRecordId })
+                });
+                var result = await resp.json();
+
+                if (result.success) {
+                  job.feishu_sync = { status: 'success', recordId: result.recordId, synced_at: new Date().toISOString() };
+                  var toastMsg = existingRecordId ? '已覆盖更新飞书记录' : '已同步到飞书求职进度表';
+                  if (typeof JobCopilot !== 'undefined' && JobCopilot.showToast) {
+                    JobCopilot.showToast(toastMsg, 'success');
+                  }
+                } else {
+                  job.feishu_sync = { status: 'failed', error: result.error || '未知错误', synced_at: new Date().toISOString() };
+                  if (typeof JobCopilot !== 'undefined' && JobCopilot.showToast) {
+                    JobCopilot.showToast('同步失败: ' + (result.error || '未知错误'), 'error');
+                  }
+                }
+
+                // Write back to localStorage
+                var allJobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
+                var idx = allJobs.findIndex(function(j) { return j.id === job.id; });
+                if (idx >= 0) {
+                  allJobs[idx].feishu_sync = job.feishu_sync;
+                  localStorage.setItem('jobcopilot_jobs', JSON.stringify(allJobs));
+                }
+
+                renderFeishuSyncBar();
+                updateFeishuSyncBtn();
+              } catch (e) {
+                job.feishu_sync = { status: 'failed', error: e.message, synced_at: new Date().toISOString() };
+                if (typeof JobCopilot !== 'undefined' && JobCopilot.showToast) {
+                  JobCopilot.showToast('同步异常: ' + e.message, 'error');
+                }
+                renderFeishuSyncBar();
+              } finally {
+                if (btn) {
+                  btn.disabled = false;
+                  updateFeishuSyncBtn();
+                }
+              }
+            }
+
+            // 更新顶部飞书按钮状态
+            function updateFeishuSyncBtn() {
+              var btn = document.getElementById('action-feishu-sync');
+              if (!btn || !feishuEnabled) return;
+              var sync = job.feishu_sync;
+              if (sync && sync.status === 'success') {
+                btn.className = 'px-3 py-1.5 text-sm bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-all';
+                btn.innerHTML = '<i class="fas fa-check mr-1"></i><span class="hidden sm:inline">已同步</span>';
+              } else {
+                btn.className = 'px-3 py-1.5 text-sm bg-teal-500 text-white rounded-lg hover:bg-teal-600 transition-all';
+                btn.innerHTML = '<i class="fas fa-cloud-arrow-up mr-1"></i><span class="hidden sm:inline">同步飞书</span>';
+              }
+            }
+
+            // 绑定顶部按钮事件
+            if (feishuSyncBtn) {
+              feishuSyncBtn.addEventListener('click', function() { doFeishuSync(); });
+            }
+
+            // 初始化渲染
+            renderFeishuSyncBar();
+            updateFeishuSyncBtn();
           });
         `
       }} />

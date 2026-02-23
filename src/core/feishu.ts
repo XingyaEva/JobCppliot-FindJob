@@ -373,6 +373,37 @@ export async function createRecord(
   return recordId;
 }
 
+/**
+ * 更新多维表格中的已有记录（覆盖写入）
+ */
+export async function updateRecord(
+  appToken: string,
+  tableId: string,
+  recordId: string,
+  fields: Record<string, any>,
+  tenantToken: string
+): Promise<string> {
+  const resp = await fetch(
+    `https://open.feishu.cn/open-apis/bitable/v1/apps/${appToken}/tables/${tableId}/records/${recordId}`,
+    {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${tenantToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ fields }),
+    }
+  );
+
+  const data = await resp.json() as any;
+  if (data.code !== 0) {
+    throw new Error(`更新记录失败 (code: ${data.code}): ${data.msg}`);
+  }
+
+  console.log(`[Feishu] 更新记录成功: ${recordId}`);
+  return recordId;
+}
+
 // ==================== 配置管理 ====================
 
 // 运行时配置存储（内存）
@@ -427,7 +458,16 @@ export function initFeishuConfigFromEnv(env: Record<string, string>): void {
  * 这是对外暴露的主方法，在 job.ts 中解析完成后调用
  * 自动处理：获取 token → wiki 转换 → 字段映射 → 写入记录
  */
-export async function syncJobToFeishu(job: Job): Promise<FeishuSyncResult> {
+/**
+ * 同步岗位数据到飞书多维表格
+ * 
+ * 这是对外暴露的主方法，在 job.ts 中解析完成后调用
+ * 自动处理：获取 token → wiki 转换 → 字段映射 → 写入/更新记录
+ * 
+ * @param job - 岗位数据
+ * @param existingRecordId - 已有的飞书记录 ID（传入则覆盖更新，否则新建）
+ */
+export async function syncJobToFeishu(job: Job, existingRecordId?: string): Promise<FeishuSyncResult> {
   const startTime = Date.now();
 
   try {
@@ -464,13 +504,21 @@ export async function syncJobToFeishu(job: Job): Promise<FeishuSyncResult> {
     // 3. 映射 Job → 飞书字段
     const fields = mapJobToFeishuFields(job);
 
-    // 4. 写入记录
-    const recordId = await createRecord(resolvedAppToken, tableId, fields, tenantToken);
-
-    const duration = Date.now() - startTime;
-    console.log(`[Feishu] 同步完成: ${job.title} @ ${job.company}, 耗时 ${duration}ms`);
-
-    return { success: true, recordId, duration_ms: duration };
+    // 4. 写入或更新记录
+    let recordId: string;
+    if (existingRecordId) {
+      // 覆盖更新已有记录
+      recordId = await updateRecord(resolvedAppToken, tableId, existingRecordId, fields, tenantToken);
+      const duration = Date.now() - startTime;
+      console.log(`[Feishu] 覆盖同步完成: ${job.title} @ ${job.company}, recordId: ${recordId}, 耗时 ${duration}ms`);
+      return { success: true, recordId, duration_ms: duration };
+    } else {
+      // 新建记录
+      recordId = await createRecord(resolvedAppToken, tableId, fields, tenantToken);
+      const duration = Date.now() - startTime;
+      console.log(`[Feishu] 新建同步完成: ${job.title} @ ${job.company}, recordId: ${recordId}, 耗时 ${duration}ms`);
+      return { success: true, recordId, duration_ms: duration };
+    }
   } catch (error) {
     const duration = Date.now() - startTime;
     const errorMsg = error instanceof Error ? error.message : String(error);

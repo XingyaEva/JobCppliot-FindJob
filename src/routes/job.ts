@@ -211,11 +211,19 @@ jobRoutes.post('/parse', async (c) => {
         job.b_analysis = result.bAnalysis;
         job.status = 'completed';
         
-        // 飞书同步（异步，不阻塞）
+        // 飞书同步（异步，不阻塞，回写结果）
         syncJobToFeishu(job).then(r => {
-          if (r.success) console.log(`[Feishu] 自动同步成功: ${job.title}, recordId: ${r.recordId}`);
-          else if (r.error !== '飞书同步未启用') console.warn(`[Feishu] 自动同步失败: ${r.error}`);
-        }).catch(e => console.warn('[Feishu] 自动同步异常:', e));
+          if (r.success) {
+            console.log(`[Feishu] 自动同步成功: ${job.title}, recordId: ${r.recordId}`);
+            (job as any).feishu_sync = { status: 'success', recordId: r.recordId, synced_at: new Date().toISOString() };
+          } else if (r.error !== '飞书同步未启用') {
+            console.warn(`[Feishu] 自动同步失败: ${r.error}`);
+            (job as any).feishu_sync = { status: 'failed', error: r.error, synced_at: new Date().toISOString() };
+          }
+        }).catch(e => {
+          console.warn('[Feishu] 自动同步异常:', e);
+          (job as any).feishu_sync = { status: 'failed', error: e.message || '同步异常', synced_at: new Date().toISOString() };
+        });
       } else {
         job.status = 'error';
         job.error_message = result.error;
@@ -331,11 +339,19 @@ jobRoutes.post('/parse-sync', async (c) => {
 
     console.log(`[API] 同步解析完成，ID: ${jobId}`);
 
-    // 飞书同步（异步，不阻塞响应）
+    // 飞书同步（异步，不阻塞响应，回写结果）
     syncJobToFeishu(job).then(r => {
-      if (r.success) console.log(`[Feishu] 自动同步成功: ${job.title}, recordId: ${r.recordId}`);
-      else if (r.error !== '飞书同步未启用') console.warn(`[Feishu] 自动同步失败: ${r.error}`);
-    }).catch(e => console.warn('[Feishu] 自动同步异常:', e));
+      if (r.success) {
+        console.log(`[Feishu] 自动同步成功: ${job.title}, recordId: ${r.recordId}`);
+        (job as any).feishu_sync = { status: 'success', recordId: r.recordId, synced_at: new Date().toISOString() };
+      } else if (r.error !== '飞书同步未启用') {
+        console.warn(`[Feishu] 自动同步失败: ${r.error}`);
+        (job as any).feishu_sync = { status: 'failed', error: r.error, synced_at: new Date().toISOString() };
+      }
+    }).catch(e => {
+      console.warn('[Feishu] 自动同步异常:', e);
+      (job as any).feishu_sync = { status: 'failed', error: e.message || '同步异常', synced_at: new Date().toISOString() };
+    });
 
     return c.json({
       success: true,
@@ -448,11 +464,19 @@ jobRoutes.post('/parse-async', async (c) => {
           
           console.log(`[API] 异步解析完成，任务ID: ${taskId}, 岗位: ${job.title}`);
           
-          // 飞书同步（异步，不阻塞）
+          // 飞书同步（异步，不阻塞，回写结果）
           syncJobToFeishu(job).then(r => {
-            if (r.success) console.log(`[Feishu] 自动同步成功: ${job.title}, recordId: ${r.recordId}`);
-            else if (r.error !== '飞书同步未启用') console.warn(`[Feishu] 自动同步失败: ${r.error}`);
-          }).catch(e => console.warn('[Feishu] 自动同步异常:', e));
+            if (r.success) {
+              console.log(`[Feishu] 自动同步成功: ${job.title}, recordId: ${r.recordId}`);
+              (job as any).feishu_sync = { status: 'success', recordId: r.recordId, synced_at: new Date().toISOString() };
+            } else if (r.error !== '飞书同步未启用') {
+              console.warn(`[Feishu] 自动同步失败: ${r.error}`);
+              (job as any).feishu_sync = { status: 'failed', error: r.error, synced_at: new Date().toISOString() };
+            }
+          }).catch(e => {
+            console.warn('[Feishu] 自动同步异常:', e);
+            (job as any).feishu_sync = { status: 'failed', error: e.message || '同步异常', synced_at: new Date().toISOString() };
+          });
         } else {
           task.status = 'error';
           task.error = result.error;

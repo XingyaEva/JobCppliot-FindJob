@@ -166,7 +166,7 @@ feishuRoutes.post('/toggle', async (c) => {
 feishuRoutes.post('/sync-job', async (c) => {
   try {
     const body = await c.req.json();
-    const { job } = body;
+    const { job, existingRecordId } = body;
 
     if (!job || !job.id) {
       return c.json({ success: false, error: '缺少岗位数据' }, 400);
@@ -176,7 +176,8 @@ feishuRoutes.post('/sync-job', async (c) => {
     const env = (c.env || {}) as Record<string, string>;
     initFeishuConfigFromEnv(env);
 
-    const result = await syncJobToFeishu(job);
+    // 如果传入了 existingRecordId，则覆盖更新已有记录
+    const result = await syncJobToFeishu(job, existingRecordId || undefined);
 
     return c.json({
       success: result.success,
