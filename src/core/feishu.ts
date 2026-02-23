@@ -105,7 +105,6 @@ export async function resolveWikiToken(wikiToken: string, tenantToken: string): 
   
   if (node.obj_type === 'sheet') {
     // 场景2：知识库中的电子表格，多维表格嵌入其中
-    // 对于此场景，需要通过电子表格元数据获取嵌入的多维表格 app_token
     console.log(`[Feishu] Wiki 节点是电子表格 (obj_token: ${node.obj_token})，尝试获取嵌入的多维表格...`);
     
     try {
@@ -113,15 +112,23 @@ export async function resolveWikiToken(wikiToken: string, tenantToken: string): 
       console.log(`[Feishu] Wiki → Sheet → Bitable 转换成功: ${wikiToken} -> ${bitableAppToken}`);
       return bitableAppToken;
     } catch (sheetErr) {
+      // sheets 权限不够或无法解析时，给出详细指引
       throw new Error(
-        `该知识库节点是电子表格，但获取嵌入的多维表格失败。` +
-        `请确保应用已开通 sheets:spreadsheet 权限。` +
-        `错误: ${sheetErr instanceof Error ? sheetErr.message : String(sheetErr)}`
+        `该知识库节点是「电子表格」(非独立多维表格)，自动解析失败。\n` +
+        `解决方案（二选一）：\n` +
+        `方案A：开通 sheets:spreadsheet 权限并重新发布应用版本，然后重试。\n` +
+        `方案B（推荐）：在飞书云文档中直接新建一个独立的「多维表格」，` +
+        `其 URL 格式为 https://xxx.feishu.cn/base/xxx，将新 URL 填入此处即可。\n` +
+        `原始错误: ${sheetErr instanceof Error ? sheetErr.message : String(sheetErr)}`
       );
     }
   }
 
-  throw new Error(`该知识库节点不是多维表格或电子表格，类型为: ${node.obj_type}`);
+  // 其他类型（docx 等）
+  throw new Error(
+    `该知识库节点类型为「${node.obj_type}」，不是多维表格。\n` +
+    `请提供一个独立的多维表格 URL（格式：https://xxx.feishu.cn/base/xxx?table=tblXXX）。`
+  );
 }
 
 /**
@@ -215,66 +222,94 @@ export function mapJobToFeishuFields(job: Job): Record<string, any> {
 
   const fields: Record<string, any> = {};
 
-  // === 基础信息 ===
+  // === 基础信息（文本字段） ===
   if (job.title) fields['岗位名称'] = job.title;
   if (job.company) fields['公司名称'] = job.company;
   if (jd?.location) fields['工作地点'] = jd.location;
   if (jd?.salary) fields['薪资范围'] = jd.salary;
 
-  // 岗位链接 —— 多维表格超链接字段格式
+  // 岗位链接 —— URL 字段格式
   if (job.job_url) {
     fields['岗位链接'] = { link: job.job_url, text: job.job_url };
   }
 
   // === A维度分析 ===
   if (aAnalysis) {
+    // 产品类型（单选字段，需匹配: ToB/ToC/ToG/平台型/未知）
     if (aAnalysis.A2_product_type?.type) {
-      fields['产品类型'] = aAnalysis.A2_product_type.type;
+      const typeMap: Record<string, string> = { 'To B': 'ToB', 'To C': 'ToC', 'To G': 'ToG' };
+      const raw = aAnalysis.A2_product_type.type;
+      fields['产品类型'] = typeMap[raw] || raw;
     }
+    // 业务领域（文本字段）
     if (aAnalysis.A3_business_domain?.primary) {
       fields['业务领域'] = aAnalysis.A3_business_domain.primary;
     }
+    // 团队阶段（单选字段，需匹配: 初创期/成长期/成熟期/未知）
     if (aAnalysis.A4_team_stage?.stage) {
       fields['团队阶段'] = aAnalysis.A4_team_stage.stage;
     }
-    // 技术栈关键词（多选字段）
+    // 技术栈关键词（文本字段，逗号分隔）
     if (aAnalysis.A1_tech_stack?.keywords?.length) {
-      fields['技术栈关键词'] = aAnalysis.A1_tech_stack.keywords;
+      fields['技术栈关键词'] = Array.isArray(aAnalysis.A1_tech_stack.keywords)
+        ? aAnalysis.A1_tech_stack.keywords.join('、')
+        : String(aAnalysis.A1_tech_stack.keywords);
     }
   }
 
   // === B维度分析 ===
   if (bAnalysis) {
+    // 学历要求（单选字段，需匹配: 本科/硕士/博士/大专/不限）
     if (bAnalysis.B2_tech_requirement?.education) {
       fields['学历要求'] = bAnalysis.B2_tech_requirement.education;
     }
+    // 经验要求（文本字段）
     if (bAnalysis.B1_industry_requirement?.summary) {
-      fields['行业经验要求'] = bAnalysis.B1_industry_requirement.summary;
+      fields['经验要求'] = bAnalysis.B1_industry_requirement.summary;
+    } else if (bAnalysis.B1_industry_requirement?.years) {
+      fields['经验要求'] = `${bAnalysis.B1_industry_requirement.years}年`;
     }
+    // 核心能力（文本字段）
     if (bAnalysis.B4_capability_requirement?.summary) {
-      fields['核心能力要求'] = bAnalysis.B4_capability_requirement.summary;
-    }
-    // 行业经验年限
-    if (bAnalysis.B1_industry_requirement?.years) {
-      fields['经验年限'] = bAnalysis.B1_industry_requirement.years;
+      fields['核心能力'] = bAnalysis.B4_capability_requirement.summary;
     }
   }
 
-  // === 岗位职责摘要 ===
-  if (jd?.responsibilities?.length) {
-    fields['岗位职责'] = jd.responsibilities.join('\n');
+  // === 岗位亮点/风险（文本字段） ===
+  if (jd?.highlights?.length) {
+    fields['岗位亮点'] = Array.isArray(jd.highlights) ? jd.highlights.join('；') : String(jd.highlights);
+  }
+  if (jd?.risks?.length) {
+    fields['风险提示'] = Array.isArray(jd.risks) ? jd.risks.join('；') : String(jd.risks);
+  }
+  // 兼容 aAnalysis 中的亮点/风险
+  if (!fields['岗位亮点'] && aAnalysis?.highlights?.length) {
+    fields['岗位亮点'] = Array.isArray(aAnalysis.highlights) ? aAnalysis.highlights.join('；') : String(aAnalysis.highlights);
+  }
+  if (!fields['风险提示'] && aAnalysis?.risks?.length) {
+    fields['风险提示'] = Array.isArray(aAnalysis.risks) ? aAnalysis.risks.join('；') : String(aAnalysis.risks);
   }
 
-  // === 数据来源 ===
-  fields['数据来源'] = job.source_type === 'image' ? '截图识别' : '文本粘贴';
+  // === 数据来源（单选字段，需匹配: 文本解析/图片解析/URL抓取） ===
+  if (job.source_type === 'image') {
+    fields['数据来源'] = '图片解析';
+  } else if (job.source_type === 'url') {
+    fields['数据来源'] = 'URL抓取';
+  } else {
+    fields['数据来源'] = '文本解析';
+  }
 
-  // === 解析时间 ===
+  // === 投递状态（单选字段，默认待投递） ===
+  fields['投递状态'] = '待投递';
+
+  // === 解析时间（日期字段，毫秒时间戳） ===
   if (job.created_at) {
-    // 多维表格日期字段需要毫秒时间戳
     const ts = new Date(job.created_at).getTime();
     if (!isNaN(ts)) {
       fields['解析时间'] = ts;
     }
+  } else {
+    fields['解析时间'] = Date.now();
   }
 
   return fields;

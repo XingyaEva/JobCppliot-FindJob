@@ -1292,9 +1292,9 @@ app.get('/settings/feishu', (c) => {
               <label class="block text-sm font-medium text-gray-700 mb-1">
                 多维表格 URL 或 App Token <span class="text-red-400">*</span>
               </label>
-              <input type="text" id="feishu-url" placeholder="https://xxx.feishu.cn/wiki/xxx?table=tblxxx 或直接填入 app_token"
+              <input type="text" id="feishu-url" placeholder="https://xxx.feishu.cn/base/xxx?table=tblxxx 或直接填入 app_token"
                 class="w-full px-3 py-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none" />
-              <p class="mt-1 text-xs text-gray-400">粘贴多维表格的完整 URL，系统会自动提取 token 和 table_id</p>
+              <p class="mt-1 text-xs text-gray-400">推荐使用独立多维表格 URL（格式：https://xxx.feishu.cn/base/xxx?table=tblxxx）</p>
             </div>
 
             {/* 解析后的 token 显示 */}
