@@ -3,6 +3,7 @@
  */
 
 import { Hono } from 'hono';
+import { quotaStorage } from '../core/storage';
 import { executeCompanyAnalyze, type CompanyAnalyzeOutput } from '../agents/company-analyze';
 import { executeInterviewPrep, type InterviewPrepOutput } from '../agents/interview-prep';
 import type { Job, Resume, Match, InterviewPrep } from '../types';
@@ -105,6 +106,13 @@ interviewRoutes.post('/:id/interview', async (c) => {
     interviewStore.set(jobId, interviewData);
 
     console.log('[面试准备API] 生成完成');
+
+    // 额度消耗：面试模拟 +1
+    const prepUserId = c.get('userId') as string | null;
+    if (prepUserId) {
+      quotaStorage.incrementUsage(prepUserId, 'interviewMocks');
+      console.log(`[Quota] interviewMocks +1 (interview-prep), user: ${prepUserId}`);
+    }
 
     return c.json({
       success: true,

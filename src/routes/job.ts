@@ -4,7 +4,7 @@
 
 import { Hono } from 'hono';
 import { DAGExecutor } from '../core/dag-executor';
-import { jobStorage, generateId, now } from '../core/storage';
+import { jobStorage, quotaStorage, generateId, now, setStorageData, STORAGE_KEYS } from '../core/storage';
 import { executeJDPreprocess, type JDPreprocessInput } from '../agents/jd-preprocess';
 import { executeJDStructure } from '../agents/jd-structure';
 import { executeAAnalysis } from '../agents/jd-analysis-a';
@@ -192,7 +192,7 @@ jobRoutes.post('/parse', async (c) => {
     // 保存初始记录
     const jobs = jobStorage.getAll();
     jobs.unshift(job);
-    jobStorage.create ? null : null; // 使用内存存储
+    setStorageData(STORAGE_KEYS.JOBS, jobs);
 
     console.log(`[API] 开始解析JD，ID: ${jobId}, 类型: ${type}`);
 
@@ -210,6 +210,20 @@ jobRoutes.post('/parse', async (c) => {
         job.a_analysis = result.aAnalysis;
         job.b_analysis = result.bAnalysis;
         job.status = 'completed';
+        
+        // 保存到存储
+        jobStorage.update(jobId, job) || (() => {
+          const jobs = jobStorage.getAll();
+          jobs.unshift(job);
+          setStorageData(STORAGE_KEYS.JOBS, jobs);
+        })();
+
+        // 额度消耗：岗位池 +1
+        const parseUserId = c.get('userId') as string | null;
+        if (parseUserId) {
+          quotaStorage.incrementUsage(parseUserId, 'jobPool');
+          console.log(`[Quota] jobPool +1 (parse), user: ${parseUserId}`);
+        }
         
         // 飞书同步（异步，不阻塞，回写结果）
         syncJobToFeishu(job).then(r => {
@@ -339,6 +353,18 @@ jobRoutes.post('/parse-sync', async (c) => {
 
     console.log(`[API] 同步解析完成，ID: ${jobId}`);
 
+    // 保存到存储
+    const jobs = jobStorage.getAll();
+    jobs.unshift(job);
+    setStorageData(STORAGE_KEYS.JOBS, jobs);
+
+    // 额度消耗：岗位池 +1
+    const userId = c.get('userId') as string | null;
+    if (userId) {
+      quotaStorage.incrementUsage(userId, 'jobPool');
+      console.log(`[Quota] jobPool +1, user: ${userId}`);
+    }
+
     // 飞书同步（异步，不阻塞响应，回写结果）
     syncJobToFeishu(job).then(r => {
       if (r.success) {
@@ -461,6 +487,18 @@ jobRoutes.post('/parse-async', async (c) => {
           task.stage = '解析完成';
           task.job = job;
           task.updatedAt = Date.now();
+          
+          // 保存到存储
+          const jobs = jobStorage.getAll();
+          jobs.unshift(job);
+          setStorageData(STORAGE_KEYS.JOBS, jobs);
+
+          // 额度消耗：岗位池 +1
+          const asyncUserId = c.get('userId') as string | null;
+          if (asyncUserId) {
+            quotaStorage.incrementUsage(asyncUserId, 'jobPool');
+            console.log(`[Quota] jobPool +1 (async), user: ${asyncUserId}`);
+          }
           
           console.log(`[API] 异步解析完成，任务ID: ${taskId}, 岗位: ${job.title}`);
           
@@ -824,6 +862,18 @@ jobRoutes.post('/parse-url', async (c) => {
     console.log(`[API] URL解析完成，ID: ${jobId}, 标题: ${job.title}, 公司: ${job.company}`);
     if (missingFields.length > 0) {
       console.warn(`[API] 警告：以下字段未能从URL爬取: ${missingFields.join(', ')}`);
+    }
+
+    // 保存到存储
+    const jobs = jobStorage.getAll();
+    jobs.unshift(job);
+    setStorageData(STORAGE_KEYS.JOBS, jobs);
+
+    // 额度消耗：岗位池 +1
+    const urlUserId = c.get('userId') as string | null;
+    if (urlUserId) {
+      quotaStorage.incrementUsage(urlUserId, 'jobPool');
+      console.log(`[Quota] jobPool +1 (url), user: ${urlUserId}`);
     }
 
     return c.json({

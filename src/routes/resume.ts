@@ -4,7 +4,7 @@
 
 import { Hono } from 'hono';
 import { DAGExecutor } from '../core/dag-executor';
-import { resumeStorage, resumeVersionStorage, matchStorage, jobStorage, generateId, now } from '../core/storage';
+import { resumeStorage, resumeVersionStorage, matchStorage, jobStorage, quotaStorage, generateId, now, setStorageData, STORAGE_KEYS } from '../core/storage';
 import { executeResumePreprocess, type ResumePreprocessInput } from '../agents/resume-preprocess';
 import { executeResumeParse, type ResumeParseOutput } from '../agents/resume-parse';
 import { executeMatchEvaluate } from '../agents/match-evaluate';
@@ -247,7 +247,19 @@ resumeRoutes.post('/upload-smart', async (c) => {
     updateParseProgress(resumeId, 100, 'completed', '解析完成！');
     setTimeout(() => clearParseProgress(resumeId), 5000);
     
+    // 持久化保存简历
+    const allResumes = resumeStorage.getAll();
+    allResumes.unshift(resume);
+    setStorageData(STORAGE_KEYS.RESUMES, allResumes);
+    
     console.log(`[Smart Upload] 解析完成: ${parseMethod}, 姓名: ${resume.name}`);
+    
+    // 额度消耗：简历版本 +1
+    const smartUserId = c.get('userId') as string | null;
+    if (smartUserId) {
+      quotaStorage.incrementUsage(smartUserId, 'resumeVersions');
+      console.log(`[Quota] resumeVersions +1 (upload-smart), user: ${smartUserId}`);
+    }
     
     return c.json({
       success: true,
@@ -368,6 +380,11 @@ async function uploadToMinerU(c: any, file: File, resumeId: string) {
     updateParseProgress(resumeId, 100, 'completed', '解析完成！');
     setTimeout(() => clearParseProgress(resumeId), 5000);
 
+    // 持久化保存简历
+    const mineruResumes = resumeStorage.getAll();
+    mineruResumes.unshift(resume);
+    setStorageData(STORAGE_KEYS.RESUMES, mineruResumes);
+
     return c.json({
       success: true,
       resumeId,
@@ -383,6 +400,22 @@ async function uploadToMinerU(c: any, file: File, resumeId: string) {
       success: false,
       error: error instanceof Error ? error.message : '未知错误',
     }, 500);
+  }
+}
+
+/**
+ * MinerU 解析成功后的额度消耗辅助函数
+ */
+function tryIncrementResumeQuota(c: any) {
+  try {
+    const userId = c.get('userId') as string | null;
+    if (userId) {
+      quotaStorage.incrementUsage(userId, 'resumeVersions');
+      console.log(`[Quota] resumeVersions +1 (mineru), user: ${userId}`);
+    }
+  } catch (e) {
+    // 额度消耗失败不影响主流程
+    console.warn('[Quota] increment failed:', e);
   }
 }
 
@@ -570,6 +603,18 @@ resumeRoutes.post('/mineru/parse', async (c) => {
 
     console.log(`[MinerU] 简历结构化完成，ID: ${finalResumeId}, 姓名: ${resume.basic_info?.name}`);
     
+    // 持久化保存简历
+    const mineruParseResumes = resumeStorage.getAll();
+    mineruParseResumes.unshift(resume);
+    setStorageData(STORAGE_KEYS.RESUMES, mineruParseResumes);
+    
+    // 额度消耗：简历版本 +1
+    const mineruParseUserId = c.get('userId') as string | null;
+    if (mineruParseUserId) {
+      quotaStorage.incrementUsage(mineruParseUserId, 'resumeVersions');
+      console.log(`[Quota] resumeVersions +1 (mineru/parse), user: ${mineruParseUserId}`);
+    }
+    
     // 完成，清理进度
     if (resumeId) {
       updateParseProgress(resumeId, 100, 'completed', '解析完成！');
@@ -659,6 +704,18 @@ resumeRoutes.post('/mineru/parse-by-url', async (c) => {
 
     console.log(`[MinerU] 简历解析完成，ID: ${resumeId}`);
 
+    // 持久化保存简历
+    const urlParseResumes = resumeStorage.getAll();
+    urlParseResumes.unshift(resume);
+    setStorageData(STORAGE_KEYS.RESUMES, urlParseResumes);
+
+    // 额度消耗：简历版本 +1
+    const urlParseUserId = c.get('userId') as string | null;
+    if (urlParseUserId) {
+      quotaStorage.incrementUsage(urlParseUserId, 'resumeVersions');
+      console.log(`[Quota] resumeVersions +1 (mineru/parse-by-url), user: ${urlParseUserId}`);
+    }
+
     return c.json({
       success: true,
       resumeId,
@@ -733,6 +790,18 @@ resumeRoutes.post('/parse', async (c) => {
     };
 
     console.log(`[API] 简历解析完成，ID: ${resumeId}, 姓名: ${resume.basic_info.name}`);
+
+    // 持久化保存简历
+    const parseResumes = resumeStorage.getAll();
+    parseResumes.unshift(resume);
+    setStorageData(STORAGE_KEYS.RESUMES, parseResumes);
+
+    // 额度消耗：简历版本 +1
+    const parseUserId = c.get('userId') as string | null;
+    if (parseUserId) {
+      quotaStorage.incrementUsage(parseUserId, 'resumeVersions');
+      console.log(`[Quota] resumeVersions +1 (parse), user: ${parseUserId}`);
+    }
 
     return c.json({
       success: true,
@@ -815,6 +884,13 @@ resumeRoutes.post('/parse-text', async (c) => {
 
     console.log(`[API] 前端文本解析完成，ID: ${resume.id}, 姓名: ${resume.name}`);
 
+    // 额度消耗：简历版本 +1
+    const textUserId = c.get('userId') as string | null;
+    if (textUserId) {
+      quotaStorage.incrementUsage(textUserId, 'resumeVersions');
+      console.log(`[Quota] resumeVersions +1 (parse-text), user: ${textUserId}`);
+    }
+
     return c.json({
       success: true,
       resumeId: resume.id,
@@ -850,6 +926,29 @@ resumeRoutes.get('/', async (c) => {
     resume,
   });
 });
+
+/**
+ * GET /api/resume/list - 获取所有简历列表
+ */
+resumeRoutes.get('/list', async (c) => {
+  const resumes = resumeStorage.getAll();
+  const stats = resumeStorage.getStats();
+
+  return c.json({
+    success: true,
+    resumes,
+    total: resumes.length,
+    stats,
+  });
+});
+
+/**
+ * GET /api/resume/progress/:id - 获取简历解析进度 (moved before /:id)
+ */
+
+/**
+ * GET /api/resume/by-job/:jobId - 获取岗位关联的简历 (moved before /:id)
+ */
 
 /**
  * GET /api/resume/:id - 获取简历详情
@@ -954,6 +1053,13 @@ resumeRoutes.post('/:id/version', async (c) => {
 
     if (!version) {
       return c.json({ success: false, error: '未找到简历' }, 404);
+    }
+
+    // 额度消耗：简历版本 +1
+    const versionUserId = c.get('userId') as string | null;
+    if (versionUserId) {
+      quotaStorage.incrementUsage(versionUserId, 'resumeVersions');
+      console.log(`[Quota] resumeVersions +1 (version), user: ${versionUserId}`);
     }
 
     return c.json({
@@ -1101,7 +1207,6 @@ export async function generateTargetedResume(c: any) {
     // 保存新简历（不通过 storage.create 以避免重复创建版本）
     const resumes = resumeStorage.getAll();
     resumes.unshift(newResume);
-    const { setStorageData, STORAGE_KEYS } = await import('../core/storage');
     setStorageData(STORAGE_KEYS.RESUMES, resumes);
 
     // 创建版本记录
@@ -1116,6 +1221,13 @@ export async function generateTargetedResume(c: any) {
     resumeStorage.linkToJob(resume.id, jobId);
 
     console.log(`[API] 定向简历生成完成，新简历 ID: ${newResume.id}`);
+
+    // 额度消耗：简历版本 +1
+    const targetUserId = c.get('userId') as string | null;
+    if (targetUserId) {
+      quotaStorage.incrementUsage(targetUserId, 'resumeVersions');
+      console.log(`[Quota] resumeVersions +1 (generate-resume), user: ${targetUserId}`);
+    }
 
     return c.json({
       success: true,

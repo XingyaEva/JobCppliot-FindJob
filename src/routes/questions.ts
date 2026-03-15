@@ -8,6 +8,7 @@ import { Hono } from 'hono';
 import { 
   questionStorage, 
   answerStorage,
+  quotaStorage,
 } from '../core/storage';
 import { getInterviewCoaching, suggestQuestions } from '../agents/interview-coach';
 import { QuestionCategory, QuestionSource, QuestionDifficulty } from '../types';
@@ -306,6 +307,13 @@ questionRoutes.post('/:id/feedback', async (c) => {
 
     // 保存反馈到回答记录
     answerStorage.updateFeedback(answer.id, coaching.feedback);
+
+    // 额度消耗：面试模拟 +1（AI 点评消耗面试额度）
+    const feedbackUserId = c.get('userId') as string | null;
+    if (feedbackUserId) {
+      quotaStorage.incrementUsage(feedbackUserId, 'interviewMocks');
+      console.log(`[Quota] interviewMocks +1 (feedback), user: ${feedbackUserId}`);
+    }
 
     return c.json({
       success: true,

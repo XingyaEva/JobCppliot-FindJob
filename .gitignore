@@ -8,6 +8,8 @@ dist/
 # Environment variables
 .env
 .env.local
+.env.staging
+.env.production
 .env.*.local
 .dev.vars
 
@@ -16,10 +18,14 @@ dist/
 .idea/
 *.swp
 *.swo
+*.code-workspace
 
 # OS
 .DS_Store
 Thumbs.db
+._*
+.Spotlight-V100
+.Trashes
 
 # Logs
 logs/
@@ -36,6 +42,7 @@ pids/
 
 # PM2
 .pm2/
+ecosystem.config.cjs
 
 # Backup files
 *.backup
@@ -46,3 +53,23 @@ coverage/
 
 # TypeScript cache
 *.tsbuildinfo
+
+# Large binary files (MinerU core, etc.)
+core
+
+# Document files (PRD etc., keep in separate docs repo)
+*.docx
+docs_*.txt
+prd_output/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyc
+venv/
+
+# Generated files
+generate_prd.py
+serve-spa.py
+test_*.sh
+test_*.js

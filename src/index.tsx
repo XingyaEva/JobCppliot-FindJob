@@ -15,7 +15,21 @@ import { metricsRoutes } from './routes/metrics'
 import questionRoutes from './routes/questions'
 import applicationRoutes from './routes/applications'
 import feishuRoutes from './routes/feishu'
+import marketRoutes from './routes/market'
+import chatRoutes from './routes/chat'
+import dashboardRoutes from './routes/dashboard'
+import todoRoutes from './routes/todos'
+import authRoutes from './routes/auth'
+import userRoutes from './routes/user'
+import { authOptional } from './core/auth-middleware'
 import { initFeishuConfigFromEnv } from './core/feishu'
+import { HomePage } from './pages/home'
+import { OpportunitiesPage } from './pages/opportunities'
+import { AssetsPage } from './pages/assets'
+import { InterviewsPage } from './pages/interviews'
+import { GrowthPage } from './pages/growth'
+import { DecisionsPage } from './pages/decisions'
+import { MonitorPage } from './pages/monitor'
 
 // 创建应用实例
 const app = new Hono()
@@ -24,6 +38,10 @@ const app = new Hono()
 app.use('*', cors())
 app.use(renderer)
 
+// ==================== 用户认证 & 个人 API ====================
+app.route('/api/auth', authRoutes)
+app.route('/api/user', userRoutes)
+
 // 飞书配置初始化（从环境变量，仅首次请求时执行）
 app.use('*', async (c, next) => {
   const env = (c.env || {}) as Record<string, string>;
@@ -31,213 +49,54 @@ app.use('*', async (c, next) => {
   await next();
 })
 
-// ==================== 页面路由 ====================
+// ==================== SPA 优先中间件 ====================
+// React SPA 路由路径列表：当 dist/index.html 存在时，优先提供 SPA，
+// 不再走 Hono SSR。这保证 wrangler pages dev 和 Cloudflare Pages 行为一致。
+const SPA_ROUTES = new Set([
+  // 核心业务页面
+  '/', '/opportunities', '/assets', '/interviews', '/growth',
+  '/decisions', '/my-dashboard', '/admin/dashboard', '/monitor',
+  '/jobs', '/resumes', '/questions', '/metrics', '/applications',
+  // 用户体系页面
+  '/login', '/phone-login', '/login-success', '/welcome',
+  '/profile', '/profile-setup', '/delete-account',
+  '/register-prompt-demo',
+  // 会员与支付页面
+  '/membership', '/subscription-plans', '/checkout',
+  '/purchase-success', '/upgrade-intercept-demo',
+  // 公共页面
+  '/terms', '/error-state',
+]);
 
-// 首页
+app.use('*', async (c, next) => {
+  const path = new URL(c.req.url).pathname;
+
+  // 只拦截 SPA 路由（非 API、非静态资源）
+  if (SPA_ROUTES.has(path)) {
+    try {
+      const env = c.env as any;
+      if (env && env.ASSETS) {
+        const url = new URL(c.req.url);
+        url.pathname = '/index.html';
+        return env.ASSETS.fetch(url.toString());
+      }
+    } catch (_) {
+      // ASSETS binding 不可用时（纯 SSR 模式），继续走 Hono 渲染
+    }
+  }
+
+  await next();
+});
+
+// ==================== 页面路由（SSR 兜底） ====================
+// 仅在 ASSETS binding 不可用时（如纯 worker 模式）才执行
+
+// 首页 - Zen Mode
 app.get('/', (c) => {
   return c.render(
-    <div class="animate-apple-fade">
-      {/* ===== Hero Section ===== */}
-      <div class="px-8 pt-10 pb-6">
-        <div class="max-w-4xl">
-          <h1 class="text-[34px] font-bold tracking-tight text-primary leading-[1.12] mb-2">
-            你好
-          </h1>
-          <p class="text-[17px] text-secondary leading-relaxed" id="home-greeting">
-            开始你的智能求职之旅
-          </p>
-        </div>
-      </div>
-
-      {/* ===== Stats Overview ===== */}
-      <div class="px-8 pb-8">
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4" id="stats-grid">
-          {/* Stat Card: 岗位 */}
-          <div class="glass-card rounded-[16px] p-5 card-hover">
-            <div class="flex items-center gap-3 mb-3">
-              <span class="w-9 h-9 rounded-[10px] bg-blue-500/10 flex items-center justify-center">
-                <i class="fas fa-briefcase text-blue-500 text-sm"></i>
-              </span>
-              <span class="text-[13px] font-medium text-secondary">已解析岗位</span>
-            </div>
-            <div class="text-[28px] font-bold text-primary tracking-tight leading-none" id="stat-jobs">0</div>
-          </div>
-          {/* Stat Card: 简历 */}
-          <div class="glass-card rounded-[16px] p-5 card-hover">
-            <div class="flex items-center gap-3 mb-3">
-              <span class="w-9 h-9 rounded-[10px] bg-emerald-500/10 flex items-center justify-center">
-                <i class="fas fa-file-alt text-emerald-500 text-sm"></i>
-              </span>
-              <span class="text-[13px] font-medium text-secondary">我的简历</span>
-            </div>
-            <div class="text-[28px] font-bold text-primary tracking-tight leading-none" id="stat-resumes">0</div>
-          </div>
-          {/* Stat Card: 面试 */}
-          <div class="glass-card rounded-[16px] p-5 card-hover">
-            <div class="flex items-center gap-3 mb-3">
-              <span class="w-9 h-9 rounded-[10px] bg-purple-500/10 flex items-center justify-center">
-                <i class="fas fa-comments text-purple-500 text-sm"></i>
-              </span>
-              <span class="text-[13px] font-medium text-secondary">面试准备</span>
-            </div>
-            <div class="text-[28px] font-bold text-primary tracking-tight leading-none" id="stat-interviews">0</div>
-          </div>
-          {/* Stat Card: 投递 */}
-          <div class="glass-card rounded-[16px] p-5 card-hover">
-            <div class="flex items-center gap-3 mb-3">
-              <span class="w-9 h-9 rounded-[10px] bg-amber-500/10 flex items-center justify-center">
-                <i class="fas fa-paper-plane text-amber-500 text-sm"></i>
-              </span>
-              <span class="text-[13px] font-medium text-secondary">已投递</span>
-            </div>
-            <div class="text-[28px] font-bold text-primary tracking-tight leading-none" id="stat-applications">0</div>
-          </div>
-        </div>
-      </div>
-
-      {/* ===== Quick Actions ===== */}
-      <div class="px-8 pb-8">
-        <h2 class="text-[13px] font-semibold text-secondary uppercase tracking-wider mb-4">快速开始</h2>
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {/* Action: 解析岗位 */}
-          <a href="/job/new" class="group glass-card rounded-[16px] p-5 card-hover flex items-center gap-4 no-underline">
-            <span class="w-11 h-11 rounded-[12px] bg-gradient-to-br from-blue-400 to-blue-600 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <i class="fas fa-wand-magic-sparkles text-white text-[15px]"></i>
-            </span>
-            <div class="min-w-0">
-              <div class="text-[15px] font-semibold text-primary group-hover:text-accent transition-colors">解析岗位</div>
-              <div class="text-[12px] text-secondary mt-0.5">粘贴JD文本或上传截图</div>
-            </div>
-          </a>
-          {/* Action: 上传简历 */}
-          <a href="/resume" class="group glass-card rounded-[16px] p-5 card-hover flex items-center gap-4 no-underline">
-            <span class="w-11 h-11 rounded-[12px] bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <i class="fas fa-cloud-arrow-up text-white text-[15px]"></i>
-            </span>
-            <div class="min-w-0">
-              <div class="text-[15px] font-semibold text-primary group-hover:text-accent transition-colors">上传简历</div>
-              <div class="text-[12px] text-secondary mt-0.5">解析并管理你的简历</div>
-            </div>
-          </a>
-          {/* Action: 面试准备 */}
-          <a href="/questions" class="group glass-card rounded-[16px] p-5 card-hover flex items-center gap-4 no-underline">
-            <span class="w-11 h-11 rounded-[12px] bg-gradient-to-br from-purple-400 to-purple-600 flex items-center justify-center flex-shrink-0 shadow-sm">
-              <i class="fas fa-graduation-cap text-white text-[15px]"></i>
-            </span>
-            <div class="min-w-0">
-              <div class="text-[15px] font-semibold text-primary group-hover:text-accent transition-colors">面试准备</div>
-              <div class="text-[12px] text-secondary mt-0.5">题库、辅导和模拟面试</div>
-            </div>
-          </a>
-        </div>
-      </div>
-
-      {/* ===== Recent Jobs Section ===== */}
-      <div class="px-8 pb-10">
-        <div class="flex items-center justify-between mb-4">
-          <h2 class="text-[13px] font-semibold text-secondary uppercase tracking-wider">最近解析</h2>
-          <a href="/jobs" class="text-[13px] font-medium text-accent hover:text-accent-hover transition-colors flex items-center gap-1">
-            查看全部 <i class="fas fa-arrow-right text-[10px]"></i>
-          </a>
-        </div>
-
-        <div id="recent-jobs" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
-          {/* Skeleton */}
-          <div class="glass-card rounded-[16px] p-5">
-            <div class="skeleton h-5 w-3/4 mb-3"></div>
-            <div class="skeleton h-4 w-1/2 mb-4"></div>
-            <div class="flex gap-2">
-              <div class="skeleton h-[22px] w-16 rounded-full"></div>
-              <div class="skeleton h-[22px] w-20 rounded-full"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ===== Footer ===== */}
-      <div class="px-8 py-5 border-t border-black/[0.04]">
-        <div class="flex flex-col sm:flex-row items-center justify-between gap-3 text-[12px] text-secondary/60">
-          <div class="flex items-center gap-3">
-            <span>Job Copilot v2.0</span>
-            <span class="w-px h-3 bg-black/10"></span>
-            <span>AI 驱动的智能求职助手</span>
-          </div>
-          <div class="flex items-center gap-4">
-            <button onclick="JobCopilot.exportData()" class="hover:text-primary/60 transition-colors flex items-center gap-1">
-              <i class="fas fa-arrow-down-to-bracket text-[10px]"></i>导出
-            </button>
-            <button onclick="JobCopilot.clearData()" class="hover:text-error transition-colors flex items-center gap-1">
-              <i class="fas fa-trash-can text-[10px]"></i>清空
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* ===== Homepage Script ===== */}
-      <script dangerouslySetInnerHTML={{
-        __html: `
-          document.addEventListener('DOMContentLoaded', function() {
-            var jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
-            var resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
-            var interviews = JSON.parse(localStorage.getItem('jobcopilot_interviews') || '[]');
-            var applications = JSON.parse(localStorage.getItem('jobcopilot_applications') || '[]');
-            var recentJobs = document.getElementById('recent-jobs');
-
-            // Greeting
-            var hour = new Date().getHours();
-            var greeting = hour < 12 ? '早上好' : hour < 18 ? '下午好' : '晚上好';
-            var el = document.getElementById('home-greeting');
-            if (el) el.textContent = greeting + '，准备好开启今天的求职之旅了吗？';
-
-            // Stats
-            var statJobs = document.getElementById('stat-jobs');
-            var statResumes = document.getElementById('stat-resumes');
-            var statInterviews = document.getElementById('stat-interviews');
-            var statApplications = document.getElementById('stat-applications');
-            if (statJobs) statJobs.textContent = jobs.length;
-            if (statResumes) statResumes.textContent = resumes.length;
-            if (statInterviews) statInterviews.textContent = interviews.length;
-            if (statApplications) statApplications.textContent = applications.length;
-
-            // Recent jobs
-            if (jobs.length === 0) {
-              recentJobs.innerHTML = '<div class="col-span-full glass-card rounded-[16px] p-10 text-center">' +
-                '<div class="w-14 h-14 rounded-full bg-black/[0.03] flex items-center justify-center mx-auto mb-4">' +
-                '<i class="fas fa-inbox text-xl text-secondary/40"></i></div>' +
-                '<p class="text-[15px] font-medium text-primary/50 mb-1">暂无解析记录</p>' +
-                '<p class="text-[13px] text-secondary/50">点击「解析岗位」开始你的第一次分析</p>' +
-                '</div>';
-              return;
-            }
-
-            recentJobs.innerHTML = jobs.slice(0, 6).map(function(job) {
-              var syncBadge = '';
-              if (job.feishu_sync && job.feishu_sync.status === 'success') {
-                syncBadge = '<span class="text-[10px] px-1.5 py-0.5 bg-emerald-500/10 text-emerald-600 rounded-full font-medium inline-flex items-center gap-0.5"><i class="fas fa-check-circle text-[8px]"></i>\u5df2\u540c\u6b65</span>';
-              } else if (job.feishu_sync && job.feishu_sync.status === 'failed') {
-                syncBadge = '<span class="text-[10px] px-1.5 py-0.5 bg-red-500/10 text-red-500 rounded-full font-medium inline-flex items-center gap-0.5"><i class="fas fa-times-circle text-[8px]"></i>\u540c\u6b65\u5931\u8d25</span>';
-              }
-              return '<div class="glass-card rounded-[16px] p-5 card-hover group">' +
-                '<div class="flex items-start justify-between mb-2">' +
-                '<a href="/job/' + job.id + '" class="text-[15px] font-semibold text-primary hover:text-accent transition-colors leading-snug">' + (job.title || '\u672a\u547d\u540d\u5c97\u4f4d') + '</a>' +
-                '<button onclick="event.stopPropagation();JobCopilot.deleteJob(\\'' + job.id + '\\')" class="text-secondary/30 hover:text-error p-1 opacity-0 group-hover:opacity-100 transition-all" title="\u5220\u9664">' +
-                '<i class="fas fa-trash-can text-[11px]"></i></button>' +
-                '</div>' +
-                '<p class="text-[13px] text-secondary mb-3">' + (job.company || '') + '</p>' +
-                '<div class="flex flex-wrap gap-1.5 mb-3">' +
-                (job.a_analysis && job.a_analysis.A2_product_type && job.a_analysis.A2_product_type.type ? '<span class="text-[11px] px-2 py-0.5 bg-blue-500/8 text-blue-600 rounded-full font-medium">' + job.a_analysis.A2_product_type.type + '</span>' : '') +
-                (job.a_analysis && job.a_analysis.A3_business_domain && job.a_analysis.A3_business_domain.primary ? '<span class="text-[11px] px-2 py-0.5 bg-emerald-500/8 text-emerald-600 rounded-full font-medium">' + job.a_analysis.A3_business_domain.primary + '</span>' : '') +
-                syncBadge +
-                '</div>' +
-                '<div class="flex items-center justify-between text-[12px] text-secondary/50">' +
-                '<span>' + new Date(job.created_at).toLocaleDateString() + '</span>' +
-                '<a href="/job/' + job.id + '/match" class="text-accent hover:text-accent-hover font-medium transition-colors">\u5339\u914d\u5206\u6790 <i class="fas fa-arrow-right text-[9px] ml-0.5"></i></a>' +
-                '</div>' +
-                '</div>';
-            }).join('');
-          });
-        `
-      }} />
+    <div>
+      <HomePage />
+      <script src="/static/home.js"></script>
     </div>,
     { title: 'Job Copilot - 智能求职助手' }
   )
@@ -2563,8 +2422,99 @@ app.get('/job/:id', (c) => {
   )
 })
 
-// 岗位库页面
+// ==================== 机会工作台 (FindJob 2.0) ====================
+app.get('/opportunities', (c) => {
+  return c.render(
+    <div>
+      <OpportunitiesPage />
+      <script src="/static/opportunities.js"></script>
+    </div>,
+    { title: '机会 - FindJob' }
+  )
+})
+
+// /jobs 重定向到 /opportunities
 app.get('/jobs', (c) => {
+  return c.redirect('/opportunities')
+})
+
+// ==================== 资产中心 (FindJob 2.0) ====================
+app.get('/assets', (c) => {
+  return c.render(
+    <div>
+      <AssetsPage />
+      <script src="/static/assets.js"></script>
+    </div>,
+    { title: '资产 - FindJob' }
+  )
+})
+
+// /resumes 重定向到 /assets
+app.get('/resumes', (c) => {
+  return c.redirect('/assets')
+})
+
+// ==================== 面试工作台 ====================
+app.get('/interviews', (c) => {
+  return c.render(
+    <div>
+      <InterviewsPage />
+      <script src="/static/interviews.js"></script>
+    </div>,
+    { title: '面试 - FindJob' }
+  )
+})
+
+// /questions 重定向到 /interviews
+app.get('/questions', (c) => {
+  return c.redirect('/interviews')
+})
+
+// 成长中心
+app.get('/growth', (c) => {
+  return c.render(
+    <div>
+      <GrowthPage />
+      <script src="/static/growth.js"></script>
+    </div>,
+    { title: '成长 - FindJob' }
+  )
+})
+
+// /metrics 重定向到 /growth
+app.get('/metrics', (c) => {
+  return c.redirect('/growth')
+})
+
+// 决策中心
+app.get('/decisions', (c) => {
+  return c.render(
+    <div>
+      <DecisionsPage />
+      <script src="/static/decisions.js"></script>
+    </div>,
+    { title: '决策 - FindJob' }
+  )
+})
+
+// 数据驾驶舱
+app.get('/monitor', (c) => {
+  return c.render(
+    <div>
+      <MonitorPage />
+      <script src="/static/monitor.js"></script>
+    </div>,
+    { title: '数据驾驶舱 - FindJob' }
+  )
+})
+
+// /applications 重定向到 /decisions
+app.get('/applications', (c) => {
+  return c.redirect('/decisions')
+})
+
+// 岗位库页面 (旧版, 保留但不再直接访问)
+app.get('/jobs-legacy', (c) => {
   return c.render(
     <div class="min-h-screen bg-white flex flex-col">
       {/* 统一导航栏 */}
@@ -3556,10 +3506,10 @@ app.get('/resume', (c) => {
   )
 })
 
-// ==================== 简历库页面（Phase 7 新增） ====================
+// ==================== 简历库页面（Phase 7 旧版，保留） ====================
 
-// 简历库列表页
-app.get('/resumes', (c) => {
+// 简历库列表页 (旧版)
+app.get('/resumes-legacy', (c) => {
   return c.render(
     <div class="min-h-screen bg-white flex flex-col">
       {/* 统一导航栏 */}
@@ -7912,1184 +7862,17 @@ app.get('/job/:id/optimize', (c) => {
   )
 })
 
-// 简历优化页
-app.get('/job/:id/optimize', (c) => {
-  const jobId = c.req.param('id');
-  
-  return c.render(
-    <div class="min-h-screen bg-white">
-      <header class="border-b border-gray-100">
-        <div class="max-w-4xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div class="flex items-center">
-            <a href={`/job/${jobId}/match`} class="text-gray-500 hover:text-gray-700 mr-4">
-              <i class="fas fa-arrow-left"></i>
-            </a>
-            <h1 id="page-title" class="text-xl font-bold">简历优化</h1>
-          </div>
-          <span id="status-badge" class="hidden px-3 py-1 bg-green-100 text-green-600 text-sm rounded-full">
-            <i class="fas fa-check mr-1"></i>已优化
-          </span>
-        </div>
-      </header>
-      
-      <main class="max-w-4xl mx-auto px-4 py-8">
-        {/* 加载状态 */}
-        <div id="loading" class="text-center py-12">
-          <i class="fas fa-spinner loading-spinner text-3xl text-gray-400 mb-4"></i>
-          <p class="text-gray-500">正在优化简历...</p>
-          <p class="text-sm text-gray-400 mt-2">预计需要 30-60 秒</p>
-          <div id="progress-steps" class="mt-6 text-left max-w-xs mx-auto space-y-2">
-            <div id="step-analyze" class="flex items-center gap-2 text-sm text-gray-500">
-              <i class="fas fa-circle text-gray-300"></i>
-              <span>分析岗位要求</span>
-            </div>
-            <div id="step-optimize" class="flex items-center gap-2 text-sm text-gray-500">
-              <i class="fas fa-circle text-gray-300"></i>
-              <span>优化简历内容</span>
-            </div>
-          </div>
-        </div>
+// (duplicate /job/:id/optimize route removed - see line ~7269 for the active one)
 
-        {/* 用户建议输入区域 */}
-        <div id="suggestion-section" class="hidden mb-6">
-          <div class="bg-yellow-50 rounded-xl p-4">
-            <h3 class="font-semibold text-yellow-700 mb-2">
-              <i class="fas fa-lightbulb mr-2"></i>有修改建议？
-            </h3>
-            <textarea 
-              id="user-suggestion"
-              class="w-full h-24 p-3 border border-yellow-200 rounded-lg focus:border-yellow-400 focus:outline-none resize-none"
-              placeholder="输入你的修改建议，例如：&#10;- 请更突出我的AI产品经验&#10;- 不要修改工作经历部分&#10;- 技能部分加入Python"
-            ></textarea>
-            <div class="flex justify-end mt-3">
-              <button 
-                id="regenerate-btn"
-                class="px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 text-sm"
-              >
-                <i class="fas fa-redo mr-1"></i>根据建议重新优化
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* 优化结果内容 */}
-        <div id="content" class="hidden space-y-6">
-          {/* 优化概览 */}
-          <div class="bg-gradient-to-r from-green-50 to-teal-50 rounded-xl p-6">
-            <h2 class="text-lg font-semibold mb-3">
-              <i class="fas fa-magic text-green-500 mr-2"></i>优化概览
-            </h2>
-            <p id="optimization-summary" class="text-gray-700 mb-4">-</p>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div class="bg-white/70 rounded-lg p-3 text-center">
-                <p class="text-xs text-gray-500 mb-1">关键词覆盖</p>
-                <p id="keywords-coverage" class="text-sm font-semibold text-green-600">-</p>
-              </div>
-              <div class="bg-white/70 rounded-lg p-3 text-center">
-                <p class="text-xs text-gray-500 mb-1">弥补差距</p>
-                <p id="gaps-count" class="text-sm font-semibold text-blue-600">-</p>
-              </div>
-              <div class="bg-white/70 rounded-lg p-3 text-center">
-                <p class="text-xs text-gray-500 mb-1">强化亮点</p>
-                <p id="highlights-count" class="text-sm font-semibold text-purple-600">-</p>
-              </div>
-              <div class="bg-white/70 rounded-lg p-3 text-center">
-                <p class="text-xs text-gray-500 mb-1">预估提升</p>
-                <p id="match-improvement" class="text-sm font-semibold text-orange-600">-</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Tab 切换 */}
-          <div class="border-b border-gray-200">
-            <nav class="flex gap-6" id="tabs">
-              <button data-tab="summary" class="tab-btn pb-3 text-sm font-medium border-b-2 border-black text-black">
-                摘要
-              </button>
-              <button data-tab="work" class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">
-                工作经历
-              </button>
-              <button data-tab="projects" class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">
-                项目经历
-              </button>
-              <button data-tab="skills" class="tab-btn pb-3 text-sm font-medium border-b-2 border-transparent text-gray-500 hover:text-gray-700">
-                技能
-              </button>
-            </nav>
-          </div>
-
-          {/* Tab 内容 */}
-          <div id="tab-content">
-            {/* 摘要 Tab */}
-            <div id="tab-summary" class="tab-panel space-y-4">
-              <div id="summary-content" class="bg-gray-50 rounded-xl p-6">
-                <p class="text-gray-400 text-center py-8">暂无摘要优化</p>
-              </div>
-            </div>
-
-            {/* 工作经历 Tab */}
-            <div id="tab-work" class="tab-panel hidden space-y-4">
-              <div id="work-list"></div>
-            </div>
-
-            {/* 项目经历 Tab */}
-            <div id="tab-projects" class="tab-panel hidden space-y-4">
-              <div id="projects-list"></div>
-            </div>
-
-            {/* 技能 Tab */}
-            <div id="tab-skills" class="tab-panel hidden">
-              <div id="skills-content" class="bg-gray-50 rounded-xl p-6">
-                <p class="text-gray-400 text-center py-8">暂无技能优化</p>
-              </div>
-            </div>
-          </div>
-
-          {/* 操作按钮 */}
-          <div class="flex flex-wrap gap-4 pt-4 border-t border-gray-100">
-            <button onclick="JobCopilot.copyAllOptimized()" class="px-6 py-2 bg-black text-white rounded-lg hover:bg-gray-800">
-              <i class="fas fa-copy mr-2"></i>复制全部优化内容
-            </button>
-            <a href={`/job/${jobId}/interview`} class="px-6 py-2 border border-gray-200 rounded-lg hover:bg-gray-50">
-              <i class="fas fa-microphone mr-2"></i>返回面试准备
-            </a>
-          </div>
-        </div>
-
-        {/* 错误状态 */}
-        <div id="error" class="hidden text-center py-12">
-          <i class="fas fa-exclamation-circle text-3xl text-red-400 mb-4"></i>
-          <p id="error-text" class="text-red-500">优化失败</p>
-          <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-gray-100 rounded-lg hover:bg-gray-200">
-            重试
-          </button>
-        </div>
-      </main>
-
-      <script dangerouslySetInnerHTML={{
-        __html: `
-          document.addEventListener('DOMContentLoaded', async function() {
-            const jobId = '${jobId}';
-            const loading = document.getElementById('loading');
-            const content = document.getElementById('content');
-            const suggestionSection = document.getElementById('suggestion-section');
-            const error = document.getElementById('error');
-            const errorText = document.getElementById('error-text');
-            const statusBadge = document.getElementById('status-badge');
-
-            let optimizationData = null;
-            let jobData = null;
-            let resumeData = null;
-            let matchData = null;
-
-            // Tab 切换
-            document.querySelectorAll('.tab-btn').forEach(btn => {
-              btn.addEventListener('click', function() {
-                const tab = this.getAttribute('data-tab');
-                document.querySelectorAll('.tab-btn').forEach(b => {
-                  b.classList.remove('border-black', 'text-black');
-                  b.classList.add('border-transparent', 'text-gray-500');
-                });
-                this.classList.remove('border-transparent', 'text-gray-500');
-                this.classList.add('border-black', 'text-black');
-                document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
-                document.getElementById('tab-' + tab).classList.remove('hidden');
-              });
-            });
-
-            // 获取数据
-            const jobs = JSON.parse(localStorage.getItem('jobcopilot_jobs') || '[]');
-            jobData = jobs.find(j => j.id === jobId);
-            const resumes = JSON.parse(localStorage.getItem('jobcopilot_resumes') || '[]');
-            resumeData = resumes[0];
-            const matches = JSON.parse(localStorage.getItem('jobcopilot_matches') || '[]');
-            matchData = matches.find(m => m.job_id === jobId) || {
-              match_level: '匹配度还可以',
-              match_score: 60,
-              strengths: [],
-              gaps: [],
-            };
-
-            if (!jobData || !resumeData) {
-              loading.classList.add('hidden');
-              error.classList.remove('hidden');
-              errorText.textContent = '缺少岗位或简历数据';
-              return;
-            }
-
-            // 更新进度
-            function updateProgress(step, status) {
-              const el = document.getElementById('step-' + step);
-              if (!el) return;
-              const icon = el.querySelector('i');
-              if (status === 'running') {
-                icon.className = 'fas fa-spinner loading-spinner text-blue-500';
-              } else if (status === 'done') {
-                icon.className = 'fas fa-check-circle text-green-500';
-              } else if (status === 'error') {
-                icon.className = 'fas fa-times-circle text-red-500';
-              }
-            }
-
-            // 执行优化
-            async function runOptimization(userSuggestions = '') {
-              try {
-                updateProgress('analyze', 'running');
-                
-                const endpoint = userSuggestions 
-                  ? '/api/job/' + jobId + '/optimize/regenerate'
-                  : '/api/job/' + jobId + '/optimize';
-                
-                const response = await fetch(endpoint, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    job: jobData,
-                    resume: resumeData,
-                    match: matchData,
-                    userSuggestions: userSuggestions || undefined,
-                  }),
-                });
-
-                const result = await response.json();
-
-                if (!result.success) {
-                  throw new Error(result.error || '优化失败');
-                }
-
-                updateProgress('analyze', 'done');
-                updateProgress('optimize', 'done');
-
-                optimizationData = result.optimization.optimization;
-                renderOptimization(optimizationData);
-
-                // 保存到localStorage
-                const optimizations = JSON.parse(localStorage.getItem('jobcopilot_optimizations') || '[]');
-                const existing = optimizations.findIndex(o => o.job_id === jobId);
-                const record = {
-                  id: jobId + '_optimize',
-                  job_id: jobId,
-                  ...result.optimization,
-                  created_at: new Date().toISOString(),
-                };
-                if (existing >= 0) {
-                  optimizations[existing] = record;
-                } else {
-                  optimizations.unshift(record);
-                }
-                localStorage.setItem('jobcopilot_optimizations', JSON.stringify(optimizations));
-
-                // 显示内容
-                loading.classList.add('hidden');
-                content.classList.remove('hidden');
-                suggestionSection.classList.remove('hidden');
-                statusBadge.classList.remove('hidden');
-                document.getElementById('page-title').textContent = '简历优化 - ' + jobData.title;
-
-              } catch (err) {
-                console.error('优化失败:', err);
-                updateProgress('analyze', 'error');
-                loading.classList.add('hidden');
-                error.classList.remove('hidden');
-                errorText.textContent = err.message || '优化失败';
-              }
-            }
-
-            // 渲染优化结果
-            function renderOptimization(data) {
-              // 概览
-              document.getElementById('optimization-summary').textContent = data.optimization_summary || '-';
-              document.getElementById('keywords-coverage').textContent = data.optimization_effect?.keywords_coverage || '-';
-              document.getElementById('gaps-count').textContent = 
-                (data.optimization_effect?.gaps_addressed?.length || 0) + '项';
-              document.getElementById('highlights-count').textContent = 
-                (data.optimization_effect?.highlights_strengthened?.length || 0) + '项';
-              document.getElementById('match-improvement').textContent = 
-                data.optimization_effect?.estimated_match_improvement || '-';
-
-              // 摘要
-              renderSummary(data.sections?.summary);
-
-              // 工作经历
-              renderWorkExperience(data.sections?.work_experience);
-
-              // 项目经历
-              renderProjects(data.sections?.projects);
-
-              // 技能
-              renderSkills(data.sections?.skills);
-            }
-
-            function renderSummary(summary) {
-              const container = document.getElementById('summary-content');
-              if (!summary || !summary.optimized) {
-                container.innerHTML = '<p class="text-gray-400 text-center py-8">暂无摘要优化</p>';
-                return;
-              }
-              container.innerHTML = renderComparisonCard('个人摘要', summary);
-            }
-
-            function renderWorkExperience(work) {
-              const container = document.getElementById('work-list');
-              if (!work || work.length === 0) {
-                container.innerHTML = '<p class="text-gray-400 text-center py-8">暂无工作经历优化</p>';
-                return;
-              }
-              container.innerHTML = work.map((w, i) => 
-                '<div class="bg-gray-50 rounded-xl p-6 mb-4">' +
-                '<div class="flex items-center justify-between mb-4">' +
-                '<h4 class="font-semibold">' +
-                '<span class="w-6 h-6 bg-blue-100 text-blue-600 rounded-full inline-flex items-center justify-center mr-2 text-sm">' + (i + 1) + '</span>' +
-                w.company + ' - ' + w.position +
-                '</h4>' +
-                '<button onclick="JobCopilot.copySection(\\'work-' + i + '\\')" class="text-gray-400 hover:text-gray-600 text-sm">' +
-                '<i class="fas fa-copy mr-1"></i>复制' +
-                '</button>' +
-                '</div>' +
-                renderDiff(w.original, w.optimized) +
-                renderChanges(w.changes, w.matched_requirements, w.keywords_added) +
-                '</div>'
-              ).join('');
-            }
-
-            function renderProjects(projects) {
-              const container = document.getElementById('projects-list');
-              if (!projects || projects.length === 0) {
-                container.innerHTML = '<p class="text-gray-400 text-center py-8">暂无项目经历优化</p>';
-                return;
-              }
-              container.innerHTML = projects.map((p, i) => 
-                '<div class="bg-gray-50 rounded-xl p-6 mb-4">' +
-                '<div class="flex items-center justify-between mb-4">' +
-                '<h4 class="font-semibold">' +
-                '<span class="w-6 h-6 bg-purple-100 text-purple-600 rounded-full inline-flex items-center justify-center mr-2 text-sm">' + (i + 1) + '</span>' +
-                p.name +
-                '</h4>' +
-                '<button onclick="JobCopilot.copySection(\\'project-' + i + '\\')" class="text-gray-400 hover:text-gray-600 text-sm">' +
-                '<i class="fas fa-copy mr-1"></i>复制' +
-                '</button>' +
-                '</div>' +
-                renderDiff(p.original, p.optimized) +
-                renderChanges(p.changes, p.matched_requirements, p.keywords_added) +
-                '</div>'
-              ).join('');
-            }
-
-            function renderSkills(skills) {
-              const container = document.getElementById('skills-content');
-              if (!skills || !skills.optimized || skills.optimized.length === 0) {
-                container.innerHTML = '<p class="text-gray-400 text-center py-8">暂无技能优化</p>';
-                return;
-              }
-              container.innerHTML = 
-                '<div class="flex items-center justify-between mb-4">' +
-                '<h4 class="font-semibold"><i class="fas fa-tools text-gray-500 mr-2"></i>技能优化</h4>' +
-                '<button onclick="JobCopilot.copySection(\\'skills\\')" class="text-gray-400 hover:text-gray-600 text-sm">' +
-                '<i class="fas fa-copy mr-1"></i>复制' +
-                '</button>' +
-                '</div>' +
-                '<div class="grid grid-cols-1 md:grid-cols-2 gap-4">' +
-                '<div class="bg-red-50 rounded-lg p-4">' +
-                '<h5 class="text-sm font-medium text-red-700 mb-2">原始技能</h5>' +
-                '<div class="flex flex-wrap gap-2">' +
-                (skills.original || []).map(s => '<span class="px-2 py-1 bg-white text-sm text-gray-600 rounded">' + s + '</span>').join('') +
-                '</div></div>' +
-                '<div class="bg-green-50 rounded-lg p-4">' +
-                '<h5 class="text-sm font-medium text-green-700 mb-2">优化后技能</h5>' +
-                '<div class="flex flex-wrap gap-2">' +
-                (skills.optimized || []).map(s => {
-                  const isNew = (skills.added || []).includes(s);
-                  const isEmphasized = (skills.emphasized || []).includes(s);
-                  let cls = 'px-2 py-1 text-sm rounded ';
-                  if (isNew) cls += 'bg-green-200 text-green-800 font-medium';
-                  else if (isEmphasized) cls += 'bg-yellow-200 text-yellow-800';
-                  else cls += 'bg-white text-gray-600';
-                  return '<span class="' + cls + '">' + s + (isNew ? ' (新增)' : '') + '</span>';
-                }).join('') +
-                '</div></div>' +
-                '</div>' +
-                (skills.changes && skills.changes.length > 0 ? 
-                  '<div class="mt-4 text-sm"><span class="text-gray-500">修改说明：</span>' + skills.changes.join('；') + '</div>' : '');
-            }
-
-            function renderComparisonCard(title, section) {
-              return '<div class="flex items-center justify-between mb-4">' +
-                '<h4 class="font-semibold"><i class="fas fa-user text-gray-500 mr-2"></i>' + title + '</h4>' +
-                '<button onclick="JobCopilot.copySection(\\'summary\\')" class="text-gray-400 hover:text-gray-600 text-sm">' +
-                '<i class="fas fa-copy mr-1"></i>复制' +
-                '</button>' +
-                '</div>' +
-                renderDiff(section.original, section.optimized) +
-                renderChanges(section.changes, section.matched_requirements);
-            }
-
-            function renderDiff(original, optimized) {
-              return '<div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">' +
-                '<div class="bg-red-50 rounded-lg p-4">' +
-                '<h5 class="text-sm font-medium text-red-700 mb-2"><i class="fas fa-minus-circle mr-1"></i>原始版本</h5>' +
-                '<p class="text-sm text-gray-700 whitespace-pre-wrap">' + (original || '-') + '</p>' +
-                '</div>' +
-                '<div class="bg-green-50 rounded-lg p-4">' +
-                '<h5 class="text-sm font-medium text-green-700 mb-2"><i class="fas fa-plus-circle mr-1"></i>优化版本</h5>' +
-                '<p class="text-sm text-gray-700 whitespace-pre-wrap">' + (optimized || '-') + '</p>' +
-                '</div>' +
-                '</div>';
-            }
-
-            function renderChanges(changes, requirements, keywords) {
-              let html = '<div class="space-y-2 text-sm">';
-              if (changes && changes.length > 0) {
-                html += '<div><span class="text-gray-500">修改说明：</span><ul class="mt-1 ml-4 list-disc text-gray-600">';
-                changes.forEach(c => html += '<li>' + c + '</li>');
-                html += '</ul></div>';
-              }
-              if (requirements && requirements.length > 0) {
-                html += '<div><span class="text-gray-500">对应JD要求：</span><span class="text-blue-600">' + requirements.join('、') + '</span></div>';
-              }
-              if (keywords && keywords.length > 0) {
-                html += '<div><span class="text-gray-500">注入关键词：</span>';
-                keywords.forEach(k => html += '<span class="ml-1 px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded text-xs">' + k + '</span>');
-                html += '</div>';
-              }
-              html += '</div>';
-              return html;
-            }
-
-            // 重新优化按钮
-            document.getElementById('regenerate-btn').addEventListener('click', async function() {
-              const suggestion = document.getElementById('user-suggestion').value.trim();
-              if (!suggestion) {
-                alert('请输入修改建议');
-                return;
-              }
-              
-              this.disabled = true;
-              this.innerHTML = '<i class="fas fa-spinner loading-spinner mr-1"></i>优化中...';
-              content.classList.add('hidden');
-              loading.classList.remove('hidden');
-              
-              // 重置进度
-              document.getElementById('step-analyze').querySelector('i').className = 'fas fa-circle text-gray-300';
-              document.getElementById('step-optimize').querySelector('i').className = 'fas fa-circle text-gray-300';
-              
-              await runOptimization(suggestion);
-              
-              this.disabled = false;
-              this.innerHTML = '<i class="fas fa-redo mr-1"></i>根据建议重新优化';
-            });
-
-            // 复制功能
-            window.JobCopilot = window.JobCopilot || {};
-            
-            window.JobCopilot.copySection = function(section) {
-              if (!optimizationData) return;
-              let text = '';
-              
-              if (section === 'summary' && optimizationData.sections?.summary) {
-                text = optimizationData.sections.summary.optimized;
-              } else if (section.startsWith('work-')) {
-                const idx = parseInt(section.split('-')[1]);
-                const w = optimizationData.sections?.work_experience?.[idx];
-                if (w) text = w.optimized;
-              } else if (section.startsWith('project-')) {
-                const idx = parseInt(section.split('-')[1]);
-                const p = optimizationData.sections?.projects?.[idx];
-                if (p) text = p.optimized;
-              } else if (section === 'skills' && optimizationData.sections?.skills) {
-                text = optimizationData.sections.skills.optimized.join('、');
-              }
-              
-              if (text) {
-                navigator.clipboard.writeText(text).then(() => showToast('已复制到剪贴板'));
-              }
-            };
-
-            window.JobCopilot.copyAllOptimized = function() {
-              if (!optimizationData) return;
-              let text = '【优化后简历】\\n\\n';
-              
-              // 摘要
-              if (optimizationData.sections?.summary?.optimized) {
-                text += '== 个人摘要 ==\\n' + optimizationData.sections.summary.optimized + '\\n\\n';
-              }
-              
-              // 工作经历
-              if (optimizationData.sections?.work_experience?.length > 0) {
-                text += '== 工作经历 ==\\n';
-                optimizationData.sections.work_experience.forEach(w => {
-                  text += '\\n【' + w.company + ' - ' + w.position + '】\\n' + w.optimized + '\\n';
-                });
-                text += '\\n';
-              }
-              
-              // 项目经历
-              if (optimizationData.sections?.projects?.length > 0) {
-                text += '== 项目经历 ==\\n';
-                optimizationData.sections.projects.forEach(p => {
-                  text += '\\n【' + p.name + '】\\n' + p.optimized + '\\n';
-                });
-                text += '\\n';
-              }
-              
-              // 技能
-              if (optimizationData.sections?.skills?.optimized?.length > 0) {
-                text += '== 技能 ==\\n' + optimizationData.sections.skills.optimized.join('、');
-              }
-              
-              navigator.clipboard.writeText(text).then(() => showToast('已复制全部优化内容'));
-            };
-
-            function showToast(message) {
-              const toast = document.createElement('div');
-              toast.className = 'fixed bottom-4 right-4 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50';
-              toast.textContent = message;
-              document.body.appendChild(toast);
-              setTimeout(() => toast.remove(), 2000);
-            }
-
-            // 开始优化
-            await runOptimization();
-          });
-        `
-      }} />
-    </div>,
-    { title: '简历优化 - Job Copilot' }
-  )
-})
-
-// ==================== 评测仪表盘页面 ====================
-app.get('/metrics', (c) => {
-  return c.render(
-    <div class="min-h-screen bg-gray-50 flex flex-col">
-      {/* 导航栏 */}
-      <header class="sticky top-0 z-50 bg-white border-b border-gray-100 shadow-sm">
-        <div class="max-w-7xl mx-auto px-4">
-          <div class="flex items-center justify-between h-14">
-            <a href="/" class="flex items-center gap-2 font-bold text-lg">
-              <span class="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white text-sm">
-                <i class="fas fa-robot"></i>
-              </span>
-              <span class="hidden sm:inline">Job Copilot</span>
-            </a>
-            <nav class="flex items-center gap-1">
-              <a href="/" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                <i class="fas fa-home mr-1.5"></i><span class="hidden sm:inline">首页</span>
-              </a>
-              <a href="/jobs" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                <i class="fas fa-briefcase mr-1.5"></i><span class="hidden sm:inline">岗位库</span>
-              </a>
-              <a href="/resume" class="px-3 py-2 rounded-lg text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-50">
-                <i class="fas fa-file-alt mr-1.5"></i><span class="hidden sm:inline">我的简历</span>
-              </a>
-              <a href="/metrics" class="px-3 py-2 rounded-lg text-sm font-medium bg-gray-100 text-gray-900">
-                <i class="fas fa-chart-bar mr-1.5"></i><span class="hidden sm:inline">评测</span>
-              </a>
-            </nav>
-            <div class="flex items-center gap-2">
-              <a href="/job/new" class="px-3 py-1.5 bg-black text-white text-sm rounded-lg hover:bg-gray-800 transition-colors">
-                <i class="fas fa-plus mr-1"></i><span class="hidden sm:inline">新建</span>
-              </a>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* 面包屑 */}
-      <div class="bg-white border-b">
-        <div class="max-w-7xl mx-auto px-4 py-3">
-          <div class="flex items-center text-sm text-gray-500">
-            <a href="/" class="hover:text-gray-700">首页</a>
-            <span class="mx-2">/</span>
-            <span class="text-gray-900 font-medium">评测仪表盘</span>
-          </div>
-        </div>
-      </div>
-
-      {/* 主内容 */}
-      <main class="flex-1 max-w-7xl mx-auto px-4 py-6 w-full">
-        {/* 页面标题 */}
-        <div class="flex items-center justify-between mb-6">
-          <div>
-            <h1 class="text-2xl font-bold text-gray-900">
-              <i class="fas fa-chart-bar mr-2 text-blue-500"></i>
-              模型评测仪表盘
-            </h1>
-            <p class="text-gray-500 mt-1">监控 Agent 性能、质量和成本</p>
-          </div>
-          <div class="flex items-center gap-2">
-            <button id="refresh-btn" class="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border rounded-lg hover:bg-gray-50">
-              <i class="fas fa-sync-alt mr-1"></i> 刷新
-            </button>
-            <button id="export-btn" class="px-3 py-2 text-sm text-gray-600 hover:text-gray-900 border rounded-lg hover:bg-gray-50">
-              <i class="fas fa-download mr-1"></i> 导出
-            </button>
-            <button id="clear-btn" class="px-3 py-2 text-sm text-red-600 hover:text-red-700 border border-red-200 rounded-lg hover:bg-red-50">
-              <i class="fas fa-trash mr-1"></i> 清空
-            </button>
-          </div>
-        </div>
-
-        {/* Tab 切换 */}
-        <div class="flex border-b mb-6">
-          <button id="tab-overview" class="px-4 py-2 text-sm font-medium border-b-2 border-blue-500 text-blue-600">
-            总览
-          </button>
-          <button id="tab-agents" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent">
-            Agent 详情
-          </button>
-          <button id="tab-experiments" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent">
-            实验管理
-          </button>
-          <button id="tab-logs" class="px-4 py-2 text-sm font-medium text-gray-500 hover:text-gray-700 border-b-2 border-transparent">
-            调用日志
-          </button>
-        </div>
-
-        {/* 总览面板 */}
-        <div id="panel-overview">
-          {/* 统计卡片 */}
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div class="bg-white rounded-xl p-4 border shadow-sm">
-              <div class="text-sm text-gray-500 mb-1">总调用次数</div>
-              <div id="stat-total-calls" class="text-2xl font-bold text-gray-900">0</div>
-            </div>
-            <div class="bg-white rounded-xl p-4 border shadow-sm">
-              <div class="text-sm text-gray-500 mb-1">成功率</div>
-              <div id="stat-success-rate" class="text-2xl font-bold text-green-600">0%</div>
-            </div>
-            <div class="bg-white rounded-xl p-4 border shadow-sm">
-              <div class="text-sm text-gray-500 mb-1">平均耗时</div>
-              <div id="stat-avg-duration" class="text-2xl font-bold text-blue-600">0ms</div>
-            </div>
-            <div class="bg-white rounded-xl p-4 border shadow-sm">
-              <div class="text-sm text-gray-500 mb-1">预估总成本</div>
-              <div id="stat-total-cost" class="text-2xl font-bold text-purple-600">$0.00</div>
-            </div>
-          </div>
-
-          {/* 图表区域 */}
-          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-            {/* 调用趋势 */}
-            <div class="bg-white rounded-xl p-4 border shadow-sm">
-              <h3 class="font-semibold text-gray-900 mb-4">
-                <i class="fas fa-chart-line mr-2 text-blue-500"></i>
-                调用趋势
-              </h3>
-              <canvas id="chart-calls" height="200"></canvas>
-            </div>
-            {/* 模型使用分布 */}
-            <div class="bg-white rounded-xl p-4 border shadow-sm">
-              <h3 class="font-semibold text-gray-900 mb-4">
-                <i class="fas fa-chart-pie mr-2 text-purple-500"></i>
-                模型使用分布
-              </h3>
-              <canvas id="chart-models" height="200"></canvas>
-            </div>
-          </div>
-
-          {/* Agent 性能对比 */}
-          <div class="bg-white rounded-xl p-4 border shadow-sm">
-            <h3 class="font-semibold text-gray-900 mb-4">
-              <i class="fas fa-robot mr-2 text-green-500"></i>
-              Agent 性能对比
-            </h3>
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="border-b">
-                    <th class="text-left py-2 px-3 font-medium text-gray-600">Agent</th>
-                    <th class="text-right py-2 px-3 font-medium text-gray-600">调用次数</th>
-                    <th class="text-right py-2 px-3 font-medium text-gray-600">成功率</th>
-                    <th class="text-right py-2 px-3 font-medium text-gray-600">平均耗时</th>
-                    <th class="text-right py-2 px-3 font-medium text-gray-600">总成本</th>
-                  </tr>
-                </thead>
-                <tbody id="agent-stats-table">
-                  <tr>
-                    <td colspan="5" class="py-8 text-center text-gray-400">
-                      <i class="fas fa-inbox text-2xl mb-2"></i>
-                      <div>暂无数据</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Agent 详情面板 */}
-        <div id="panel-agents" class="hidden">
-          <div class="bg-white rounded-xl p-4 border shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold text-gray-900">
-                <i class="fas fa-list mr-2 text-blue-500"></i>
-                Agent 详细性能
-              </h3>
-              <select id="agent-filter" class="px-3 py-1.5 text-sm border rounded-lg">
-                <option value="">全部 Agent</option>
-              </select>
-            </div>
-            <div id="agent-details-content">
-              <div class="py-8 text-center text-gray-400">
-                <i class="fas fa-inbox text-2xl mb-2"></i>
-                <div>暂无数据</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 实验管理面板 */}
-        <div id="panel-experiments" class="hidden">
-          <div class="bg-white rounded-xl p-4 border shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold text-gray-900">
-                <i class="fas fa-flask mr-2 text-purple-500"></i>
-                A/B 测试实验
-              </h3>
-            </div>
-            <div id="experiments-list">
-              <div class="py-8 text-center text-gray-400">
-                <i class="fas fa-flask text-2xl mb-2"></i>
-                <div>加载中...</div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* 调用日志面板 */}
-        <div id="panel-logs" class="hidden">
-          <div class="bg-white rounded-xl p-4 border shadow-sm">
-            <div class="flex items-center justify-between mb-4">
-              <h3 class="font-semibold text-gray-900">
-                <i class="fas fa-history mr-2 text-gray-500"></i>
-                最近调用记录
-              </h3>
-              <div class="flex items-center gap-2">
-                <select id="log-agent-filter" class="px-3 py-1.5 text-sm border rounded-lg">
-                  <option value="">全部 Agent</option>
-                </select>
-                <select id="log-status-filter" class="px-3 py-1.5 text-sm border rounded-lg">
-                  <option value="">全部状态</option>
-                  <option value="true">成功</option>
-                  <option value="false">失败</option>
-                </select>
-              </div>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="w-full text-sm">
-                <thead>
-                  <tr class="border-b">
-                    <th class="text-left py-2 px-3 font-medium text-gray-600">时间</th>
-                    <th class="text-left py-2 px-3 font-medium text-gray-600">Agent</th>
-                    <th class="text-left py-2 px-3 font-medium text-gray-600">模型</th>
-                    <th class="text-right py-2 px-3 font-medium text-gray-600">耗时</th>
-                    <th class="text-right py-2 px-3 font-medium text-gray-600">Token</th>
-                    <th class="text-right py-2 px-3 font-medium text-gray-600">成本</th>
-                    <th class="text-center py-2 px-3 font-medium text-gray-600">状态</th>
-                  </tr>
-                </thead>
-                <tbody id="logs-table">
-                  <tr>
-                    <td colspan="7" class="py-8 text-center text-gray-400">
-                      <i class="fas fa-inbox text-2xl mb-2"></i>
-                      <div>暂无调用记录</div>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      </main>
-
-      {/* Chart.js CDN */}
-      <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-
-      {/* 页面脚本 */}
-      <script dangerouslySetInnerHTML={{
-        __html: `
-          const STORAGE_KEY = 'jobcopilot_metrics';
-          const EXPERIMENTS_KEY = 'jobcopilot_experiments';
-          let metricsData = [];
-          let experimentsData = [];
-          let callsChart = null;
-          let modelsChart = null;
-
-          // 加载数据
-          function loadData() {
-            try {
-              metricsData = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-              experimentsData = JSON.parse(localStorage.getItem(EXPERIMENTS_KEY) || '[]');
-            } catch (e) {
-              console.error('Failed to load data:', e);
-              metricsData = [];
-              experimentsData = [];
-            }
-          }
-
-          // 保存数据
-          function saveMetrics() {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(metricsData));
-          }
-
-          function saveExperiments() {
-            localStorage.setItem(EXPERIMENTS_KEY, JSON.stringify(experimentsData));
-          }
-
-          // 计算汇总统计
-          function calculateSummary() {
-            if (metricsData.length === 0) {
-              return {
-                total_calls: 0,
-                success_count: 0,
-                success_rate: 0,
-                avg_duration_ms: 0,
-                total_cost_usd: 0,
-                by_agent: {},
-                by_model: {}
-              };
-            }
-
-            const successCount = metricsData.filter(m => m.success).length;
-            const totalDuration = metricsData.reduce((sum, m) => sum + m.duration_ms, 0);
-            const totalCost = metricsData.reduce((sum, m) => sum + (m.cost_usd_est || 0), 0);
-
-            // 按 Agent 分组
-            const byAgent = {};
-            metricsData.forEach(m => {
-              if (!byAgent[m.agent_name]) {
-                byAgent[m.agent_name] = { calls: 0, success: 0, duration: 0, cost: 0 };
-              }
-              byAgent[m.agent_name].calls++;
-              if (m.success) byAgent[m.agent_name].success++;
-              byAgent[m.agent_name].duration += m.duration_ms;
-              byAgent[m.agent_name].cost += m.cost_usd_est || 0;
-            });
-
-            // 按模型分组
-            const byModel = {};
-            metricsData.forEach(m => {
-              if (!byModel[m.model]) {
-                byModel[m.model] = { calls: 0, tokens: 0, cost: 0 };
-              }
-              byModel[m.model].calls++;
-              byModel[m.model].tokens += (m.input_tokens_est || 0) + (m.output_tokens_est || 0);
-              byModel[m.model].cost += m.cost_usd_est || 0;
-            });
-
-            return {
-              total_calls: metricsData.length,
-              success_count: successCount,
-              success_rate: successCount / metricsData.length,
-              avg_duration_ms: totalDuration / metricsData.length,
-              total_cost_usd: totalCost,
-              by_agent: byAgent,
-              by_model: byModel
-            };
-          }
-
-          // 更新统计卡片
-          function updateStats() {
-            const summary = calculateSummary();
-            
-            document.getElementById('stat-total-calls').textContent = summary.total_calls;
-            document.getElementById('stat-success-rate').textContent = 
-              (summary.success_rate * 100).toFixed(1) + '%';
-            document.getElementById('stat-avg-duration').textContent = 
-              summary.avg_duration_ms > 1000 
-                ? (summary.avg_duration_ms / 1000).toFixed(2) + 's'
-                : summary.avg_duration_ms.toFixed(0) + 'ms';
-            document.getElementById('stat-total-cost').textContent = 
-              '$' + summary.total_cost_usd.toFixed(4);
-
-            // 更新 Agent 表格
-            const agentTable = document.getElementById('agent-stats-table');
-            if (Object.keys(summary.by_agent).length === 0) {
-              agentTable.innerHTML = '<tr><td colspan="5" class="py-8 text-center text-gray-400"><i class="fas fa-inbox text-2xl mb-2"></i><div>暂无数据</div></td></tr>';
-            } else {
-              agentTable.innerHTML = Object.entries(summary.by_agent)
-                .sort((a, b) => b[1].calls - a[1].calls)
-                .map(([name, stats]) => \`
-                  <tr class="border-b hover:bg-gray-50">
-                    <td class="py-2 px-3 font-medium">\${name}</td>
-                    <td class="py-2 px-3 text-right">\${stats.calls}</td>
-                    <td class="py-2 px-3 text-right">
-                      <span class="\${stats.success / stats.calls > 0.9 ? 'text-green-600' : 'text-yellow-600'}">
-                        \${(stats.success / stats.calls * 100).toFixed(1)}%
-                      </span>
-                    </td>
-                    <td class="py-2 px-3 text-right">\${(stats.duration / stats.calls).toFixed(0)}ms</td>
-                    <td class="py-2 px-3 text-right">$\${stats.cost.toFixed(4)}</td>
-                  </tr>
-                \`).join('');
-            }
-
-            // 更新 Agent 筛选器
-            const agentFilter = document.getElementById('agent-filter');
-            const logAgentFilter = document.getElementById('log-agent-filter');
-            const agentNames = [...new Set(metricsData.map(m => m.agent_name))];
-            const agentOptions = '<option value="">全部 Agent</option>' + 
-              agentNames.map(name => '<option value="' + name + '">' + name + '</option>').join('');
-            agentFilter.innerHTML = agentOptions;
-            logAgentFilter.innerHTML = agentOptions;
-          }
-
-          // 更新图表
-          function updateCharts() {
-            const summary = calculateSummary();
-
-            // 调用趋势图
-            const callsCtx = document.getElementById('chart-calls');
-            if (callsChart) callsChart.destroy();
-
-            // 按小时分组
-            const hourlyData = {};
-            metricsData.forEach(m => {
-              const hour = m.timestamp.slice(0, 13) + ':00';
-              hourlyData[hour] = (hourlyData[hour] || 0) + 1;
-            });
-            const sortedHours = Object.keys(hourlyData).sort().slice(-24);
-
-            callsChart = new Chart(callsCtx, {
-              type: 'line',
-              data: {
-                labels: sortedHours.map(h => h.slice(11, 16)),
-                datasets: [{
-                  label: '调用次数',
-                  data: sortedHours.map(h => hourlyData[h]),
-                  borderColor: '#3B82F6',
-                  backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                  fill: true,
-                  tension: 0.4
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                  y: { beginAtZero: true }
-                }
-              }
-            });
-
-            // 模型分布饼图
-            const modelsCtx = document.getElementById('chart-models');
-            if (modelsChart) modelsChart.destroy();
-
-            const modelNames = Object.keys(summary.by_model);
-            const modelColors = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'];
-
-            modelsChart = new Chart(modelsCtx, {
-              type: 'doughnut',
-              data: {
-                labels: modelNames,
-                datasets: [{
-                  data: modelNames.map(m => summary.by_model[m].calls),
-                  backgroundColor: modelColors.slice(0, modelNames.length)
-                }]
-              },
-              options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                  legend: { position: 'right' }
-                }
-              }
-            });
-          }
-
-          // 更新日志表格
-          function updateLogs() {
-            const agentFilter = document.getElementById('log-agent-filter').value;
-            const statusFilter = document.getElementById('log-status-filter').value;
-
-            let filtered = [...metricsData];
-            if (agentFilter) {
-              filtered = filtered.filter(m => m.agent_name === agentFilter);
-            }
-            if (statusFilter !== '') {
-              filtered = filtered.filter(m => m.success === (statusFilter === 'true'));
-            }
-
-            const logsTable = document.getElementById('logs-table');
-            if (filtered.length === 0) {
-              logsTable.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-gray-400"><i class="fas fa-inbox text-2xl mb-2"></i><div>暂无调用记录</div></td></tr>';
-            } else {
-              logsTable.innerHTML = filtered
-                .slice(-50)
-                .reverse()
-                .map(m => \`
-                  <tr class="border-b hover:bg-gray-50">
-                    <td class="py-2 px-3 text-gray-500">\${new Date(m.timestamp).toLocaleString('zh-CN')}</td>
-                    <td class="py-2 px-3 font-medium">\${m.agent_name}</td>
-                    <td class="py-2 px-3"><span class="px-2 py-0.5 bg-gray-100 rounded text-xs">\${m.model}</span></td>
-                    <td class="py-2 px-3 text-right">\${m.duration_ms}ms</td>
-                    <td class="py-2 px-3 text-right">\${(m.input_tokens_est || 0) + (m.output_tokens_est || 0)}</td>
-                    <td class="py-2 px-3 text-right">$\${(m.cost_usd_est || 0).toFixed(4)}</td>
-                    <td class="py-2 px-3 text-center">
-                      \${m.success 
-                        ? '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-green-100 text-green-700"><i class="fas fa-check mr-1"></i>成功</span>'
-                        : '<span class="inline-flex items-center px-2 py-0.5 rounded text-xs bg-red-100 text-red-700"><i class="fas fa-times mr-1"></i>失败</span>'
-                      }
-                    </td>
-                  </tr>
-                \`).join('');
-            }
-          }
-
-          // 更新实验列表
-          function updateExperiments() {
-            // 默认实验模板
-            const defaultExperiments = [
-              { id: 'exp_1', name: 'JD B维度分析: GPT-4.1 vs DeepSeek', agent_name: 'jd-analysis-b', control: { model: 'gpt-4.1', weight: 50 }, treatment: { model: 'deepseek-v3', weight: 50 }, enabled: false },
-              { id: 'exp_2', name: '匹配评估: GPT-4.1 vs Qwen-Max', agent_name: 'match-evaluate', control: { model: 'gpt-4.1', weight: 50 }, treatment: { model: 'qwen-max', weight: 50 }, enabled: false },
-              { id: 'exp_3', name: '简历优化: GPT-4.1 vs DeepSeek', agent_name: 'resume-optimize', control: { model: 'gpt-4.1', weight: 50 }, treatment: { model: 'deepseek-v3', weight: 50 }, enabled: false },
-              { id: 'exp_4', name: '面试准备: GPT-4.1 vs DeepSeek', agent_name: 'interview-prep', control: { model: 'gpt-4.1', weight: 50 }, treatment: { model: 'deepseek-v3', weight: 50 }, enabled: false },
-            ];
-
-            const experiments = experimentsData.length > 0 ? experimentsData : defaultExperiments;
-            if (experimentsData.length === 0) {
-              experimentsData = defaultExperiments;
-              saveExperiments();
-            }
-
-            const container = document.getElementById('experiments-list');
-            container.innerHTML = experiments.map(exp => \`
-              <div class="border rounded-lg p-4 mb-3 \${exp.enabled ? 'border-purple-300 bg-purple-50' : ''}">
-                <div class="flex items-center justify-between">
-                  <div>
-                    <h4 class="font-medium text-gray-900">\${exp.name}</h4>
-                    <p class="text-sm text-gray-500 mt-1">
-                      Agent: <span class="font-mono">\${exp.agent_name}</span>
-                    </p>
-                    <div class="flex items-center gap-4 mt-2 text-sm">
-                      <span class="text-blue-600">
-                        <i class="fas fa-circle mr-1"></i>
-                        控制组: \${exp.control.model} (\${exp.control.weight}%)
-                      </span>
-                      <span class="text-purple-600">
-                        <i class="fas fa-circle mr-1"></i>
-                        实验组: \${exp.treatment.model} (\${exp.treatment.weight}%)
-                      </span>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-2">
-                    <label class="relative inline-flex items-center cursor-pointer">
-                      <input type="checkbox" class="sr-only peer" \${exp.enabled ? 'checked' : ''} 
-                        onchange="toggleExperiment('\${exp.id}', this.checked)">
-                      <div class="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-purple-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
-                      <span class="ml-2 text-sm font-medium text-gray-700">\${exp.enabled ? '运行中' : '已停止'}</span>
-                    </label>
-                  </div>
-                </div>
-              </div>
-            \`).join('');
-          }
-
-          // 切换实验状态
-          function toggleExperiment(id, enabled) {
-            const exp = experimentsData.find(e => e.id === id);
-            if (exp) {
-              // 如果启用，禁用同一 Agent 的其他实验
-              if (enabled) {
-                experimentsData.forEach(e => {
-                  if (e.agent_name === exp.agent_name && e.id !== id) {
-                    e.enabled = false;
-                  }
-                });
-              }
-              exp.enabled = enabled;
-              saveExperiments();
-              updateExperiments();
-              showToast(enabled ? '实验已启用' : '实验已停止');
-            }
-          }
-
-          // Tab 切换
-          function setupTabs() {
-            const tabs = ['overview', 'agents', 'experiments', 'logs'];
-            tabs.forEach(tab => {
-              document.getElementById('tab-' + tab).addEventListener('click', () => {
-                tabs.forEach(t => {
-                  document.getElementById('tab-' + t).classList.remove('border-blue-500', 'text-blue-600');
-                  document.getElementById('tab-' + t).classList.add('text-gray-500', 'border-transparent');
-                  document.getElementById('panel-' + t).classList.add('hidden');
-                });
-                document.getElementById('tab-' + tab).classList.remove('text-gray-500', 'border-transparent');
-                document.getElementById('tab-' + tab).classList.add('border-blue-500', 'text-blue-600');
-                document.getElementById('panel-' + tab).classList.remove('hidden');
-
-                if (tab === 'logs') updateLogs();
-                if (tab === 'experiments') updateExperiments();
-              });
-            });
-          }
-
-          // Toast 通知
-          function showToast(message) {
-            const toast = document.createElement('div');
-            toast.className = 'fixed bottom-4 right-4 bg-black text-white px-4 py-2 rounded-lg shadow-lg z-50';
-            toast.textContent = message;
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 2000);
-          }
-
-          // 刷新数据
-          function refresh() {
-            loadData();
-            updateStats();
-            updateCharts();
-            updateLogs();
-            updateExperiments();
-            showToast('数据已刷新');
-          }
-
-          // 导出数据
-          function exportData() {
-            const data = JSON.stringify(metricsData, null, 2);
-            const blob = new Blob([data], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'metrics_' + new Date().toISOString().slice(0, 10) + '.json';
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast('数据已导出');
-          }
-
-          // 清空数据
-          function clearData() {
-            if (confirm('确定要清空所有评测数据吗？此操作不可恢复。')) {
-              metricsData = [];
-              saveMetrics();
-              refresh();
-              showToast('数据已清空');
-            }
-          }
-
-          // 初始化
-          document.addEventListener('DOMContentLoaded', () => {
-            loadData();
-            setupTabs();
-            updateStats();
-            updateCharts();
-            updateExperiments();
-
-            document.getElementById('refresh-btn').addEventListener('click', refresh);
-            document.getElementById('export-btn').addEventListener('click', exportData);
-            document.getElementById('clear-btn').addEventListener('click', clearData);
-            document.getElementById('log-agent-filter').addEventListener('change', updateLogs);
-            document.getElementById('log-status-filter').addEventListener('change', updateLogs);
-          });
-        `
-      }} />
-    </div>,
-    { title: '评测仪表盘 - Job Copilot' }
-  )
-})
 
 // ==================== API 路由 ====================
+
+// 业务 API 统一注入 authOptional 中间件（识别已登录用户，用于额度消耗）
+app.use('/api/job/*', authOptional)
+app.use('/api/jobs/*', authOptional)
+app.use('/api/resume/*', authOptional)
+app.use('/api/questions/*', authOptional)
+app.use('/api/applications/*', authOptional)
 
 // 挂载岗位相关路由
 app.route('/api/job', jobRoutes)
@@ -9121,6 +7904,18 @@ app.route('/api/applications', applicationRoutes)
 
 // 挂载飞书集成相关路由
 app.route('/api/feishu', feishuRoutes)
+
+// 挂载市场调研相关路由
+app.route('/api/market', marketRoutes)
+
+// 挂载用户 Dashboard 聚合 API
+app.route('/api/user/dashboard', dashboardRoutes)
+
+// 挂载待办事项 API
+app.route('/api/todos', todoRoutes)
+
+// Chat Agent
+app.route('/api', chatRoutes)
 
 // API健康检查
 app.get('/api/health', (c) => {
@@ -9598,6 +8393,45 @@ npm run deploy
     },
   });
 });
+
+// ==================== SPA Fallback ====================
+// For client-side React Router: serve index.html for all non-API, non-static routes
+// This handles direct URL access to SPA routes like /opportunities, /dashboard, etc.
+app.get('*', async (c) => {
+  const path = new URL(c.req.url).pathname;
+  
+  // Skip API routes (handled above) and static files
+  if (path.startsWith('/api/') || path.startsWith('/static/') || path.startsWith('/assets/')) {
+    return c.notFound();
+  }
+  
+  // For SPA routes, try to serve index.html from the static assets
+  try {
+    // In Cloudflare Pages, we can fetch the index.html from the ASSETS binding
+    const env = c.env as any;
+    if (env && env.ASSETS) {
+      const url = new URL(c.req.url);
+      url.pathname = '/index.html';
+      return env.ASSETS.fetch(url.toString());
+    }
+  } catch (e) {
+    // Fallback: return a basic redirect
+  }
+  
+  // Ultimate fallback: return the SPA HTML shell
+  return c.html(`<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>FindJob - 智能求职助手</title>
+    <script>window.location.href = '/' + window.location.hash;</script>
+  </head>
+  <body>
+    <div id="root">Loading...</div>
+  </body>
+</html>`);
+})
 
 // 导出应用
 export default app

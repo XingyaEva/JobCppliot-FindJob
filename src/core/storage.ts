@@ -8,7 +8,8 @@
 import type { 
   Job, Resume, ResumeVersion, ResumeContent, Match, InterviewPrep, ResumeOptimization,
   QuestionBankItem, QuestionAnswer, QuestionCategory, QuestionDifficulty, QuestionSource,
-  Application, ApplicationStatus, ApplicationStats, InterviewRecord, StatusChange
+  Application, ApplicationStatus, ApplicationStats, InterviewRecord, StatusChange,
+  UserActivity, WeeklyGoal, TodoItem, TodoSource, TodoPriority
 } from '../types';
 
 // 存储键
@@ -24,6 +25,15 @@ export const STORAGE_KEYS = {
   ANSWERS: 'jobcopilot_answers',
   // Phase 9 新增
   APPLICATIONS: 'jobcopilot_applications',
+  // Phase A7 新增
+  USER_ACTIVITIES: 'jobcopilot_user_activities',
+  WEEKLY_GOALS: 'jobcopilot_weekly_goals',
+  TODOS: 'jobcopilot_todos',
+  // 用户体系
+  USERS: 'jobcopilot_users',
+  AUTH_TOKENS: 'jobcopilot_auth_tokens',
+  SMS_CODES: 'jobcopilot_sms_codes',
+  USAGE_QUOTAS: 'jobcopilot_usage_quotas',
 } as const;
 
 // 服务端内存存储（临时方案）
@@ -37,6 +47,13 @@ const memoryStore: Record<string, any[]> = {
   [STORAGE_KEYS.QUESTIONS]: [],
   [STORAGE_KEYS.ANSWERS]: [],
   [STORAGE_KEYS.APPLICATIONS]: [],
+  [STORAGE_KEYS.USER_ACTIVITIES]: [],
+  [STORAGE_KEYS.WEEKLY_GOALS]: [],
+  [STORAGE_KEYS.TODOS]: [],
+  [STORAGE_KEYS.USERS]: [],
+  [STORAGE_KEYS.AUTH_TOKENS]: [],
+  [STORAGE_KEYS.SMS_CODES]: [],
+  [STORAGE_KEYS.USAGE_QUOTAS]: [],
 };
 
 /**
@@ -916,5 +933,508 @@ export const applicationStorage = {
       thisWeek,
       thisMonth,
     };
+  },
+};
+
+// ==================== Phase A7: 用户活动记录 ====================
+
+export const userActivityStorage = {
+  getAll(): UserActivity[] {
+    return getStorageData<UserActivity>(STORAGE_KEYS.USER_ACTIVITIES);
+  },
+
+  getRecent(limit: number = 20): UserActivity[] {
+    return this.getAll()
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, limit);
+  },
+
+  // 按时间范围查询
+  getByTimeRange(startDate: Date, endDate: Date): UserActivity[] {
+    return this.getAll().filter(a => {
+      const t = new Date(a.created_at).getTime();
+      return t >= startDate.getTime() && t <= endDate.getTime();
+    });
+  },
+
+  // 记录活动
+  record(activity: Omit<UserActivity, 'id' | 'created_at'>): UserActivity {
+    const newActivity: UserActivity = {
+      ...activity,
+      id: generateId(),
+      created_at: now(),
+    };
+    const activities = this.getAll();
+    activities.unshift(newActivity);
+    // 只保留最近 500 条
+    if (activities.length > 500) {
+      activities.length = 500;
+    }
+    setStorageData(STORAGE_KEYS.USER_ACTIVITIES, activities);
+    return newActivity;
+  },
+
+  // 按类型统计
+  countByType(type: UserActivity['type'], since?: Date): number {
+    let activities = this.getAll().filter(a => a.type === type);
+    if (since) {
+      activities = activities.filter(a => new Date(a.created_at).getTime() >= since.getTime());
+    }
+    return activities.length;
+  },
+
+  // 按周聚合（返回最近 N 周的各类型计数）
+  aggregateByWeek(weeks: number = 4): Array<{
+    weekLabel: string;
+    weekStart: Date;
+    parseJobs: number;
+    applyResumes: number;
+    interviewPrep: number;
+  }> {
+    const result = [];
+    const nowDate = new Date();
+
+    for (let i = weeks - 1; i >= 0; i--) {
+      const weekEnd = new Date(nowDate);
+      weekEnd.setDate(weekEnd.getDate() - i * 7);
+      const weekStart = new Date(weekEnd);
+      weekStart.setDate(weekStart.getDate() - 7);
+
+      const weekActivities = this.getByTimeRange(weekStart, weekEnd);
+
+      result.push({
+        weekLabel: `第${weeks - i}周`,
+        weekStart,
+        parseJobs: weekActivities.filter(a => a.type === 'parse').length,
+        applyResumes: weekActivities.filter(a => a.type === 'apply' || a.type === 'resume').length,
+        interviewPrep: weekActivities.filter(a => a.type === 'interview').length,
+      });
+    }
+
+    return result;
+  },
+
+  clear(): void {
+    setStorageData(STORAGE_KEYS.USER_ACTIVITIES, []);
+  },
+};
+
+// ==================== Phase A7: 周目标 ====================
+
+// 获取本周一的 00:00:00 ISO 字符串
+function getWeekStart(date?: Date): string {
+  const d = date ? new Date(date) : new Date();
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // 周一
+  const monday = new Date(d);
+  monday.setDate(diff);
+  monday.setHours(0, 0, 0, 0);
+  return monday.toISOString();
+}
+
+export const weeklyGoalStorage = {
+  getAll(): WeeklyGoal[] {
+    return getStorageData<WeeklyGoal>(STORAGE_KEYS.WEEKLY_GOALS);
+  },
+
+  // 获取本周的目标
+  getCurrentWeek(): WeeklyGoal[] {
+    const weekStart = getWeekStart();
+    return this.getAll().filter(g => g.weekStart === weekStart);
+  },
+
+  getById(id: string): WeeklyGoal | undefined {
+    return this.getAll().find(g => g.id === id);
+  },
+
+  create(goal: Omit<WeeklyGoal, 'id' | 'created_at' | 'updated_at'>): WeeklyGoal {
+    const newGoal: WeeklyGoal = {
+      ...goal,
+      id: generateId(),
+      created_at: now(),
+      updated_at: now(),
+    };
+    const goals = this.getAll();
+    goals.unshift(newGoal);
+    setStorageData(STORAGE_KEYS.WEEKLY_GOALS, goals);
+    return newGoal;
+  },
+
+  update(id: string, updates: Partial<WeeklyGoal>): WeeklyGoal | undefined {
+    const goals = this.getAll();
+    const index = goals.findIndex(g => g.id === id);
+    if (index === -1) return undefined;
+
+    goals[index] = {
+      ...goals[index],
+      ...updates,
+      updated_at: now(),
+    };
+
+    // 自动标记完成
+    if (goals[index].current >= goals[index].target) {
+      goals[index].completed = true;
+    }
+
+    setStorageData(STORAGE_KEYS.WEEKLY_GOALS, goals);
+    return goals[index];
+  },
+
+  delete(id: string): boolean {
+    const goals = this.getAll();
+    const filtered = goals.filter(g => g.id !== id);
+    if (filtered.length === goals.length) return false;
+    setStorageData(STORAGE_KEYS.WEEKLY_GOALS, filtered);
+    return true;
+  },
+
+  // 如果本周没有目标，自动生成默认目标
+  ensureCurrentWeek(): WeeklyGoal[] {
+    const current = this.getCurrentWeek();
+    if (current.length > 0) return current;
+
+    const weekStart = getWeekStart();
+    const defaults = [
+      { text: '解析并评估 5 个新岗位', target: 5 },
+      { text: '投递 3 份定向简历', target: 3 },
+      { text: '完成 2 场面试准备', target: 2 },
+      { text: '练习 10 道面试题', target: 10 },
+    ];
+
+    const created: WeeklyGoal[] = [];
+    for (const d of defaults) {
+      created.push(this.create({
+        text: d.text,
+        current: 0,
+        target: d.target,
+        completed: false,
+        weekStart,
+        autoGenerated: true,
+      }));
+    }
+    return created;
+  },
+};
+
+// ==================== Phase A7: 待办事项 ====================
+
+export const todoStorage = {
+  getAll(): TodoItem[] {
+    return getStorageData<TodoItem>(STORAGE_KEYS.TODOS);
+  },
+
+  getById(id: string): TodoItem | undefined {
+    return this.getAll().find(t => t.id === id);
+  },
+
+  // 获取活跃的待办（未完成 & 未关闭）
+  getActive(): TodoItem[] {
+    return this.getAll().filter(t => !t.completed && !t.dismissed);
+  },
+
+  // 获取手动创建的待办
+  getManual(): TodoItem[] {
+    return this.getAll().filter(t => t.source === 'manual');
+  },
+
+  create(todo: Omit<TodoItem, 'id' | 'created_at' | 'updated_at'>): TodoItem {
+    const newTodo: TodoItem = {
+      ...todo,
+      id: generateId(),
+      created_at: now(),
+      updated_at: now(),
+    };
+    const todos = this.getAll();
+    todos.unshift(newTodo);
+    setStorageData(STORAGE_KEYS.TODOS, todos);
+    return newTodo;
+  },
+
+  update(id: string, updates: Partial<TodoItem>): TodoItem | undefined {
+    const todos = this.getAll();
+    const index = todos.findIndex(t => t.id === id);
+    if (index === -1) return undefined;
+
+    todos[index] = {
+      ...todos[index],
+      ...updates,
+      updated_at: now(),
+    };
+    setStorageData(STORAGE_KEYS.TODOS, todos);
+    return todos[index];
+  },
+
+  delete(id: string): boolean {
+    const todos = this.getAll();
+    const filtered = todos.filter(t => t.id !== id);
+    if (filtered.length === todos.length) return false;
+    setStorageData(STORAGE_KEYS.TODOS, filtered);
+    return true;
+  },
+
+  // 标记完成
+  complete(id: string): TodoItem | undefined {
+    return this.update(id, { completed: true });
+  },
+
+  // 关闭自动推导的待办（不删除，标记 dismissed）
+  dismiss(id: string): TodoItem | undefined {
+    return this.update(id, { dismissed: true });
+  },
+
+  // 按 ruleName 查找（用于自动推导去重）
+  findByRule(ruleName: string, relatedId?: string): TodoItem | undefined {
+    return this.getAll().find(t =>
+      t.ruleName === ruleName &&
+      (!relatedId || t.relatedId === relatedId) &&
+      !t.completed &&
+      !t.dismissed
+    );
+  },
+
+  // 清理已完成超过 7 天的待办
+  cleanup(): number {
+    const todos = this.getAll();
+    const cutoff = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const filtered = todos.filter(t => {
+      if ((t.completed || t.dismissed) && new Date(t.updated_at) < cutoff) {
+        return false;
+      }
+      return true;
+    });
+    const removed = todos.length - filtered.length;
+    if (removed > 0) {
+      setStorageData(STORAGE_KEYS.TODOS, filtered);
+    }
+    return removed;
+  },
+};
+
+
+// ==================== 用户体系存储 ====================
+
+export interface StoredUser {
+  id: string;
+  phone: string;
+  email?: string;
+  nickname?: string;
+  avatar?: string;
+  role: 'user' | 'admin';
+  isInitialized: boolean;
+  isPremium: boolean;
+  salaryRange?: string;
+  industries?: string[];
+  workStyle?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface StoredAuthToken {
+  id: string;
+  userId: string;
+  token: string;
+  expiresAt: string;
+  created_at: string;
+}
+
+export interface StoredSmsCode {
+  id: string;
+  phone: string;
+  code: string;
+  expiresAt: string;
+  used: boolean;
+  created_at: string;
+}
+
+export interface StoredQuota {
+  id: string;
+  userId: string;
+  jobPool: { used: number; limit: number };
+  resumeVersions: { used: number; limit: number };
+  interviewMocks: { used: number; limit: number };
+  updated_at: string;
+}
+
+export const userStorage = {
+  getAll(): StoredUser[] {
+    return getStorageData<StoredUser>(STORAGE_KEYS.USERS);
+  },
+
+  getById(id: string): StoredUser | undefined {
+    return this.getAll().find(u => u.id === id);
+  },
+
+  getByPhone(phone: string): StoredUser | undefined {
+    return this.getAll().find(u => u.phone === phone);
+  },
+
+  create(data: Omit<StoredUser, 'id' | 'created_at' | 'updated_at'>): StoredUser {
+    const user: StoredUser = {
+      ...data,
+      id: generateId(),
+      created_at: now(),
+      updated_at: now(),
+    };
+    const users = this.getAll();
+    users.push(user);
+    setStorageData(STORAGE_KEYS.USERS, users);
+    return user;
+  },
+
+  update(id: string, updates: Partial<StoredUser>): StoredUser | undefined {
+    const users = this.getAll();
+    const idx = users.findIndex(u => u.id === id);
+    if (idx === -1) return undefined;
+    users[idx] = { ...users[idx], ...updates, updated_at: now() };
+    setStorageData(STORAGE_KEYS.USERS, users);
+    return users[idx];
+  },
+
+  delete(id: string): boolean {
+    const users = this.getAll();
+    const filtered = users.filter(u => u.id !== id);
+    if (filtered.length === users.length) return false;
+    setStorageData(STORAGE_KEYS.USERS, filtered);
+    return true;
+  },
+};
+
+export const authTokenStorage = {
+  getAll(): StoredAuthToken[] {
+    return getStorageData<StoredAuthToken>(STORAGE_KEYS.AUTH_TOKENS);
+  },
+
+  create(userId: string): StoredAuthToken {
+    const token: StoredAuthToken = {
+      id: generateId(),
+      userId,
+      token: `fj_${generateId()}_${Date.now().toString(36)}`,
+      expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(), // 7 天
+      created_at: now(),
+    };
+    const tokens = this.getAll();
+    tokens.push(token);
+    setStorageData(STORAGE_KEYS.AUTH_TOKENS, tokens);
+    return token;
+  },
+
+  verify(tokenStr: string): StoredAuthToken | undefined {
+    const tokens = this.getAll();
+    const found = tokens.find(t => t.token === tokenStr);
+    if (!found) return undefined;
+    if (new Date(found.expiresAt) < new Date()) return undefined; // 已过期
+    return found;
+  },
+
+  deleteByUserId(userId: string): number {
+    const tokens = this.getAll();
+    const filtered = tokens.filter(t => t.userId !== userId);
+    const count = tokens.length - filtered.length;
+    if (count > 0) setStorageData(STORAGE_KEYS.AUTH_TOKENS, filtered);
+    return count;
+  },
+
+  deleteByToken(tokenStr: string): boolean {
+    const tokens = this.getAll();
+    const filtered = tokens.filter(t => t.token !== tokenStr);
+    if (filtered.length === tokens.length) return false;
+    setStorageData(STORAGE_KEYS.AUTH_TOKENS, filtered);
+    return true;
+  },
+};
+
+export const smsCodeStorage = {
+  getAll(): StoredSmsCode[] {
+    return getStorageData<StoredSmsCode>(STORAGE_KEYS.SMS_CODES);
+  },
+
+  create(phone: string): StoredSmsCode {
+    // 生成 6 位随机验证码
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const sms: StoredSmsCode = {
+      id: generateId(),
+      phone,
+      code,
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 分钟
+      used: false,
+      created_at: now(),
+    };
+    const codes = this.getAll();
+    codes.push(sms);
+    setStorageData(STORAGE_KEYS.SMS_CODES, codes);
+    return sms;
+  },
+
+  verify(phone: string, code: string): boolean {
+    const codes = this.getAll();
+    const found = codes.find(c =>
+      c.phone === phone && c.code === code && !c.used &&
+      new Date(c.expiresAt) > new Date()
+    );
+    if (!found) return false;
+    // 标记已使用
+    found.used = true;
+    setStorageData(STORAGE_KEYS.SMS_CODES, codes);
+    return true;
+  },
+
+  // 检查是否可以发送（60秒冷却）
+  canSend(phone: string): boolean {
+    const codes = this.getAll();
+    const recent = codes.filter(c => c.phone === phone)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0];
+    if (!recent) return true;
+    return (Date.now() - new Date(recent.created_at).getTime()) > 60000;
+  },
+};
+
+export const quotaStorage = {
+  getAll(): StoredQuota[] {
+    return getStorageData<StoredQuota>(STORAGE_KEYS.USAGE_QUOTAS);
+  },
+
+  getByUserId(userId: string): StoredQuota | undefined {
+    return this.getAll().find(q => q.userId === userId);
+  },
+
+  getOrCreate(userId: string, isPremium: boolean): StoredQuota {
+    const existing = this.getByUserId(userId);
+    if (existing) return existing;
+
+    // 默认额度
+    const limits = isPremium
+      ? { jobPool: 999, resumeVersions: 50, interviewMocks: 100 }
+      : { jobPool: 10, resumeVersions: 3, interviewMocks: 5 };
+
+    const quota: StoredQuota = {
+      id: generateId(),
+      userId,
+      jobPool: { used: 0, limit: limits.jobPool },
+      resumeVersions: { used: 0, limit: limits.resumeVersions },
+      interviewMocks: { used: 0, limit: limits.interviewMocks },
+      updated_at: now(),
+    };
+    const quotas = this.getAll();
+    quotas.push(quota);
+    setStorageData(STORAGE_KEYS.USAGE_QUOTAS, quotas);
+    return quota;
+  },
+
+  incrementUsage(userId: string, type: 'jobPool' | 'resumeVersions' | 'interviewMocks'): StoredQuota | undefined {
+    const quotas = this.getAll();
+    const idx = quotas.findIndex(q => q.userId === userId);
+    if (idx === -1) return undefined;
+    quotas[idx][type].used += 1;
+    quotas[idx].updated_at = now();
+    setStorageData(STORAGE_KEYS.USAGE_QUOTAS, quotas);
+    return quotas[idx];
+  },
+
+  delete(userId: string): boolean {
+    const quotas = this.getAll();
+    const filtered = quotas.filter(q => q.userId !== userId);
+    if (filtered.length === quotas.length) return false;
+    setStorageData(STORAGE_KEYS.USAGE_QUOTAS, filtered);
+    return true;
   },
 };
