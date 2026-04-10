@@ -47,7 +47,7 @@ export function GrowthPage() {
   ];
 
   return (
-    <div className="h-screen flex flex-col bg-background">
+    <div className="h-full flex flex-col bg-background -m-8">
       {/* 页面标题区 */}
       <div className="flex-shrink-0 px-7 pt-7 pb-5">
         <h1 className="text-3xl font-semibold mb-2">成长</h1>

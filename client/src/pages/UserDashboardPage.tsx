@@ -188,11 +188,7 @@ export function UserDashboardPage() {
 
   return (
     <div
-      className="h-screen flex flex-col bg-background overflow-y-auto"
-      style={{
-        scrollbarWidth: "thin",
-        scrollbarColor: "rgba(0,0,0,0.15) transparent",
-      }}
+      className="flex flex-col bg-background -m-8"
     >
       {/* 页面标题 */}
       <div className="flex-shrink-0 px-7 pt-7 pb-2">
