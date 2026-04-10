@@ -628,7 +628,7 @@ jobRoutes.get('/', async (c) => {
   
   return c.json({
     success: true,
-    jobs,
+    data: jobs,
     total: jobs.length,
   });
 });

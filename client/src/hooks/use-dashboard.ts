@@ -32,7 +32,7 @@ export function useDashboardSummary() {
         applied: number;
         interview: number;
       };
-    }>('/api/user/dashboard/summary'),
+    }>('/user/dashboard/summary'),
     staleTime: 60 * 1000, // 1 分钟
   });
 }
@@ -48,7 +48,7 @@ export function useDashboardFunnel() {
         count: number;
         rate: number;
       }>;
-    }>('/api/user/dashboard/funnel'),
+    }>('/user/dashboard/funnel'),
     staleTime: 60 * 1000,
   });
 }
@@ -65,7 +65,7 @@ export function useDashboardActivityTrend(weeks: number = 4) {
         applyResumes: number;
         interviewPrep: number;
       }>;
-    }>(`/api/user/dashboard/activity-trend?weeks=${weeks}`),
+    }>(`/user/dashboard/activity-trend?weeks=${weeks}`),
     staleTime: 2 * 60 * 1000,
   });
 }
@@ -83,7 +83,7 @@ export function useDashboardSkillRadar() {
       }>;
       overallScore: number;
       matchCount: number;
-    }>('/api/user/dashboard/skill-radar'),
+    }>('/user/dashboard/skill-radar'),
     staleTime: 2 * 60 * 1000,
   });
 }
@@ -100,7 +100,7 @@ export function useDashboardActivities(limit: number = 20) {
         title: string;
         time: string;
       }>;
-    }>(`/api/user/dashboard/activities?limit=${limit}`),
+    }>(`/user/dashboard/activities?limit=${limit}`),
     staleTime: 30 * 1000,
   });
 }
@@ -120,7 +120,7 @@ export function useDashboardInsights() {
         actionPath: string;
         priority: 'high' | 'medium' | 'low';
       }>;
-    }>('/api/user/dashboard/insights'),
+    }>('/user/dashboard/insights'),
     staleTime: 5 * 60 * 1000,
   });
 }
@@ -134,7 +134,7 @@ export function useWeeklyGoals() {
       goals: WeeklyGoal[];
       completed: number;
       total: number;
-    }>('/api/user/dashboard/weekly-goals'),
+    }>('/user/dashboard/weekly-goals'),
     staleTime: 30 * 1000,
   });
 }
@@ -143,7 +143,7 @@ export function useUpdateWeeklyGoal() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, ...updates }: { id: string } & Partial<WeeklyGoal>) =>
-      api.put(`/api/user/dashboard/weekly-goals/${id}`, updates),
+      api.put(`/user/dashboard/weekly-goals/${id}`, updates),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.userDashboard.weeklyGoals() });
     },
@@ -154,7 +154,7 @@ export function useCreateWeeklyGoal() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: { text: string; target: number }) =>
-      api.post('/api/user/dashboard/weekly-goals', data),
+      api.post('/user/dashboard/weekly-goals', data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.userDashboard.weeklyGoals() });
     },
@@ -165,7 +165,7 @@ export function useDeleteWeeklyGoal() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) =>
-      api.delete(`/api/user/dashboard/weekly-goals/${id}`),
+      api.delete(`/user/dashboard/weekly-goals/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.userDashboard.weeklyGoals() });
     },
